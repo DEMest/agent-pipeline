@@ -42,5 +42,5 @@ test('скилл завершается зелёным CI, а не запись�
 });
 
 test('команда ссылается на скилл', () => {
-  assert.match(readFileSync('commands/pipeline-init.md', 'utf8'), /pipeline-init/);
+  assert.match(readFileSync('commands/init.md', 'utf8'), /pipeline-init/);
 });
