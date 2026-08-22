@@ -29,4 +29,17 @@ test('README объясняет установку и то, что настро�
   const readme = readFileSync('README.md', 'utf8');
   assert.match(readme, /plugin marketplace add/);
   assert.match(readme, /pipeline:init/);
+  // Утверждение про агента проверяется отдельно: без него тест проходил бы,
+  // даже если бы объяснение «настройкой занимается агент» из README пропало.
+  assert.match(readme, /Настройкой занимается агент/);
+});
+
+test('README честно перечисляет, что пока не поддерживается', () => {
+  const readme = readFileSync('README.md', 'utf8');
+  assert.match(readme, /Пока не поддерживается/);
+  // Названия нереализованных частей: если какую-то из них построят, строку нужно убрать
+  // осознанно, а не оставить README обещающим то, чего нет, или отрицающим то, что есть.
+  for (const missing of ['python', 'деплой', 'ship']) {
+    assert.match(readme, new RegExp(missing, 'i'), `README должен упоминать ${missing} среди границ`);
+  }
 });
