@@ -106,3 +106,12 @@ test('джобам выданы минимальные права', () => {
   assert.deepEqual(jobs.build.permissions, { contents: 'read', packages: 'write' });
   assert.deepEqual(jobs['deploy-staging'].permissions, { contents: 'read', issues: 'write' });
 });
+
+test('compose копируется на сервер до запуска — иначе там нечего поднимать', () => {
+  const jobSteps = doc().jobs['deploy-staging'].steps;
+  const copyIndex = jobSteps.findIndex((s) => s.name === 'Скопировать compose на сервер');
+  const upIndex = jobSteps.findIndex((s) => s.name === 'Выкатить образ');
+  assert.notEqual(copyIndex, -1, 'шага копирования compose нет');
+  assert.ok(copyIndex < upIndex, 'compose должен попасть на сервер раньше запуска');
+  assert.match(jobSteps[copyIndex].run, /scp .*deploy\/compose\.yml/);
+});

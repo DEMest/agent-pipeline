@@ -204,3 +204,11 @@ test('ship не мерджит, пока проверки не зелёные', 
 test('команда ship ссылается на скилл', () => {
   assert.match(readText('commands/ship.md'), /pipeline-ship/);
 });
+
+test('init кладёт compose в проект, когда в конфиге есть выкатка', () => {
+  // Без этого файла workflow выкатки падает на копировании его на сервер.
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /deploy\/compose\.yml/);
+  assert.match(text, /SSH_KEY/);
+  assert.match(text, /Environment/);
+});

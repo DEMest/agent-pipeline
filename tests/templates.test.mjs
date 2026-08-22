@@ -81,3 +81,10 @@ test('SessionStart-хук построен на белом списке разр
 
   assert.match(hook, /echo/);
 });
+
+test('шаблон compose берёт тег образа из переменной, а не прибивает его гвоздями', () => {
+  // Один и тот же файл обслуживает выкатку и откат: подставляется другой IMAGE.
+  const compose = readText('templates/deploy/docker-vps/compose.yml');
+  assert.match(compose, /image: \$\{IMAGE\}/);
+  assert.equal(/image: .*:latest/.test(compose), false);
+});

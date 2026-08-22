@@ -77,6 +77,17 @@ function environmentJob(envName, env, config, image) {
       run: sshSetup(),
     },
     {
+      // compose.yml живёт в репозитории проекта и копируется на сервер при каждой
+      // выкатке. Иначе `docker compose up` на сервере запускать нечего, а версия
+      // на сервере незаметно расходилась бы с той, что в репозитории.
+      name: 'Скопировать compose на сервер',
+      env: { DEPLOY_HOST: env.host },
+      run: [
+        `ssh -i ~/.ssh/id_deploy "$DEPLOY_HOST" "mkdir -p ~/.pipeline/${project}"`,
+        `scp -i ~/.ssh/id_deploy deploy/compose.yml "$DEPLOY_HOST:~/.pipeline/${project}/compose.yml"`,
+      ].join('\n'),
+    },
+    {
       name: 'Выкатить образ',
       env: { DEPLOY_HOST: env.host, IMAGE: image },
       run: remoteDeploy(project),
