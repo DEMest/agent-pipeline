@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { generateInto, checkDrift } from '../src/cli.mjs';
+
+const CLI_PATH = join('src', 'cli.mjs');
+
+function runCli(args) {
+  return spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8' });
+}
 
 const CONFIG_TEXT = `
 version: 1
@@ -107,4 +114,44 @@ test('отсутствующий артефакт считается устар�
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('неподдерживаемый стек не оставляет ни одного записанного файла', () => {
+  const dir = makeProject(CONFIG_TEXT.replace('stack: node-ts', 'stack: python'));
+  try {
+    assert.throws(() => generateInto(dir));
+    assert.equal(existsSync(join(dir, 'scripts', 'pipeline.sh')), false);
+    assert.equal(existsSync(join(dir, '.github', 'workflows', 'ci.yml')), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI на неподдерживаемом стеке печатает сообщение об ошибке без стектрейса Node и код 1', () => {
+  const dir = makeProject(CONFIG_TEXT.replace('stack: node-ts', 'stack: python'));
+  try {
+    const result = runCli(['generate', dir]);
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr.trim(), 'стек python пока не поддерживается генератором CI');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI без каталога проекта печатает подсказку по использованию и завершается ненулевым кодом', () => {
+  const result = runCli(['check']);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /использование/i);
+});
+
+test('CLI совсем без аргументов печатает подсказку и завершается ненулевым кодом', () => {
+  const result = runCli([]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /использование/i);
+});
+
+test('CLI с неизвестной командой достижимо сообщает об этом с кодом 2', () => {
+  const result = runCli(['frobnicate', '.']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /неизвестная команда/);
 });

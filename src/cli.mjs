@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadConfig, configHash } from './config.mjs';
 import { generatePipelineSh } from './generate-sh.mjs';
 import { generateCi } from './generate-ci.mjs';
@@ -24,8 +25,14 @@ export function generateInto(projectDir) {
   const config = loadConfig(configPath);
   const hash = configHash(readFileSync(configPath, 'utf8'));
 
-  writeFileLf(shPath, generatePipelineSh(config, hash));
-  writeFileLf(ciPath, generateCi(config, hash));
+  // Сначала сформировать оба текста и только потом писать оба файла: generateCi
+  // бросает UnsupportedStackError для python/go/java, и если бы шаблон sh уже
+  // был на диске к этому моменту, в проекте остались бы половина артефактов.
+  const shText = generatePipelineSh(config, hash);
+  const ciText = generateCi(config, hash);
+
+  writeFileLf(shPath, shText);
+  writeFileLf(ciPath, ciText);
 
   return { written: [shPath, ciPath], hash };
 }
@@ -49,20 +56,50 @@ export function checkDrift(projectDir) {
   return { ok: stale.length === 0, stale };
 }
 
-const [, , command, projectDir] = process.argv;
-if (command && projectDir) {
-  if (command === 'generate') {
-    const { written } = generateInto(projectDir);
-    for (const path of written) console.log(`записано: ${path}`);
-  } else if (command === 'check') {
+const USAGE = 'использование: node src/cli.mjs <generate|check> <каталог проекта>';
+
+// Явный разбор аргументов вместо неявного "если оба на месте": раньше
+// `node src/cli.mjs check` без каталога проваливал условие `command && projectDir`
+// целиком, ничего не печатал и завершался кодом 0 — вызывающий получал «всё хорошо»
+// вместо ошибки о нехватке аргумента.
+function runCli(command, projectDir) {
+  if (!command) {
+    console.error(USAGE);
+    return 2;
+  }
+  if (command !== 'generate' && command !== 'check') {
+    console.error(`неизвестная команда: ${command} (доступны: generate, check)`);
+    return 2;
+  }
+  if (!projectDir) {
+    console.error(USAGE);
+    return 2;
+  }
+
+  try {
+    if (command === 'generate') {
+      const { written } = generateInto(projectDir);
+      for (const path of written) console.log(`записано: ${path}`);
+      return 0;
+    }
     const { ok, stale } = checkDrift(projectDir);
     if (!ok) {
       for (const path of stale) console.error(`устарело: ${path}`);
-      process.exit(1);
+      return 1;
     }
     console.log('артефакты соответствуют конфигу');
-  } else {
-    console.error(`неизвестная команда: ${command} (доступны: generate, check)`);
-    process.exit(2);
+    return 0;
+  } catch (e) {
+    // Сообщение об ошибке (ConfigError о неверном конфиге, UnsupportedStackError
+    // о нереализованном стеке), а не сырой стектрейс Node — README обещает
+    // «отказывает явной ошибкой, а не молча», а стектрейс молчит о сути дела.
+    console.error(e.message);
+    return 1;
   }
+}
+
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMainModule) {
+  const [, , command, projectDir] = process.argv;
+  process.exitCode = runCli(command, projectDir);
 }
