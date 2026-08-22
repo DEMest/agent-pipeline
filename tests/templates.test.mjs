@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readText } from './read-text.mjs';
 import { parseConfig } from '../src/config.mjs';
 
 test('заготовка конфига после подстановки значений валидна', () => {
-  const tmpl = readFileSync('templates/common/config.yml.tmpl', 'utf8');
+  const tmpl = readText('templates/common/config.yml.tmpl');
   const filled = tmpl
     .replaceAll('{{NAME}}', 'my-app')
     .replaceAll('{{STACK}}', 'node-ts')
@@ -17,12 +17,12 @@ test('заготовка конфига после подстановки зна
 });
 
 test('заготовка объясняет, что файл ведёт агент', () => {
-  const tmpl = readFileSync('templates/common/config.yml.tmpl', 'utf8');
+  const tmpl = readText('templates/common/config.yml.tmpl');
   assert.match(tmpl, /pipeline:reconfigure/);
 });
 
 test('пресет node-ts содержит команды проверок и список обязательных', () => {
-  const preset = JSON.parse(readFileSync('templates/stacks/node-ts/preset.json', 'utf8'));
+  const preset = JSON.parse(readText('templates/stacks/node-ts/preset.json'));
   assert.ok(Object.hasOwn(preset.checks, 'test'));
   assert.ok(Object.hasOwn(preset.checks, 'build'));
   assert.ok(Array.isArray(preset.required));
@@ -32,13 +32,13 @@ test('пресет node-ts содержит команды проверок и �
 });
 
 test('smoke-тест шаблона не зависит от кода проекта', () => {
-  const smoke = readFileSync('templates/stacks/node-ts/smoke.test.mjs', 'utf8');
+  const smoke = readText('templates/stacks/node-ts/smoke.test.mjs');
   assert.match(smoke, /node:test/);
   assert.equal(smoke.includes('../src/'), false);
 });
 
 test('настройки шаблона объявляют SessionStart-хук', () => {
-  const settings = JSON.parse(readFileSync('templates/common/claude-settings.json', 'utf8'));
+  const settings = JSON.parse(readText('templates/common/claude-settings.json'));
   const entries = settings.hooks.SessionStart;
   assert.ok(Array.isArray(entries) && entries.length > 0);
   assert.match(JSON.stringify(entries), /pipeline-status\.sh/);
@@ -51,7 +51,7 @@ test('настройки шаблона объявляют SessionStart-хук',
 // (c=curl; $c ...). Единственная надёжная проверка — белый список: у хука есть ровно пять
 // разрешённых форм строк, и любая строка, не подходящая ни под одну из них, обязана валить тест.
 test('SessionStart-хук построен на белом списке разрешённых конструкций', () => {
-  const hook = readFileSync('templates/common/hooks/pipeline-status.sh', 'utf8');
+  const hook = readText('templates/common/hooks/pipeline-status.sh');
   const lines = hook.split('\n');
 
   const isShebang = (line) => /^#!/.test(line);

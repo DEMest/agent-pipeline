@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readText } from './read-text.mjs';
 
-const SKILL = () => readFileSync('skills/pipeline-init/SKILL.md', 'utf8');
+const SKILL = () => readText('skills/pipeline-init/SKILL.md');
 
 test('у скилла есть frontmatter с name и description', () => {
   const text = SKILL();
@@ -52,5 +52,5 @@ test('скилл завершается зелёным CI, а не запись�
 });
 
 test('команда ссылается на скилл', () => {
-  assert.match(readFileSync('commands/init.md', 'utf8'), /pipeline-init/);
+  assert.match(readText('commands/init.md'), /pipeline-init/);
 });

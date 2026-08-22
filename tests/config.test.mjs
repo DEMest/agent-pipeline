@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readText } from './read-text.mjs';
 import { parseConfig, configHash, ConfigError } from '../src/config.mjs';
 
 const VALID = `
@@ -147,6 +147,6 @@ test('хеш не зависит от перевода строк: LF и CRLF о
 });
 
 test('.gitattributes закрепляет LF за .pipeline/config.yml', () => {
-  const attrs = readFileSync('.gitattributes', 'utf8');
+  const attrs = readText('.gitattributes');
   assert.match(attrs, /^\.pipeline\/config\.yml\s+text\s+eol=lf$/m);
 });
