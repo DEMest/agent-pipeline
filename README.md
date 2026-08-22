@@ -1,66 +1,102 @@
 # Agent Pipeline
 
-Каркас, который разворачивает в проекте цикл: промпт → код → тесты → PR → CI → merge → деплой.
+A Claude Code plugin that sets up the loop your project actually needs: prompt → code → tests → PR →
+CI → merge → deploy. One config file describes the project; everything else is generated from it.
 
-Сейчас построена первая часть этого цикла — от конфига проекта до зелёного CI. Что уже работает,
-а что нет, перечислено в разделе «Границы текущей версии».
-
-## Установка
+## Install
 
     /plugin marketplace add DEMest/agent-pipeline
 
-## Настройка
+## Setup
 
-Настройкой занимается агент, а не вы. В папке проекта:
+The agent does the setup, not you. In your project directory:
 
     /pipeline:init
 
-Он определит стек, снимет реальные команды проверок с проекта, задаст недостающие вопросы,
-сгенерирует `.github/workflows/ci.yml` и `scripts/pipeline.sh`, откроет PR и доведёт его до
-зелёного CI.
+It detects the stack, reads the real check commands out of your project instead of guessing them,
+asks only what it cannot find out on its own, generates the CI workflow, opens a pull request and
+takes it to a green build.
 
-## Что появляется в проекте
+## What lands in your project
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `.pipeline/config.yml` | единственный источник правды, ведёт агент |
-| `.github/workflows/ci.yml` | сгенерирован, не править руками |
-| `scripts/pipeline.sh` | те же команды локально, что и в CI |
+| `.pipeline/config.yml` | the single source of truth; the agent maintains it |
+| `.github/workflows/ci.yml` | generated — do not edit by hand |
+| `.github/workflows/deploy.yml` | generated, only when a `deploy` section exists |
+| `scripts/pipeline.sh` | the same checks locally that CI runs |
+| `deploy/compose.yml` | copied to your server on every deploy |
+| `.claude/` | a hook that tells the next agent whether the pipeline is configured |
 
-CI не зависит от плагина: проект собирается и тестируется, даже если плагин не установлен.
+Nothing else. The tests and fixtures in this repository stay here — they are what keeps the
+generator honest, and they never travel into your project.
 
-## Границы текущей версии
+## How it works
 
-Работает:
+The config is the only thing you or the agent edit. The workflow and the local script are generated
+from it, and each generated file carries a marker with the sha256 of the config it came from:
 
-- стек **node-ts**: определение команд проверок, генерация CI и `scripts/pipeline.sh`;
-- обнаружение рассогласования — если конфиг поправили, а артефакты не перегенерировали, CI краснеет;
-- развёртывание в новом или существующем проекте через `/pipeline:init` до зелёного CI;
-- цикл `ship` от промпта до мерджа: ветка, тесты, PR, зелёный CI, мердж по режиму автономности проекта;
-- автоматическая диагностика упавшего CI по логу прогона и его починка;
-- выкатка на собственный VPS: образ с тегом коммита, healthcheck, автоматический откат на
-  предыдущий образ при провале и issue с ссылкой на прогон. Окружения с `auto: false` проходят
-  через одобрение человека в GitHub Environments.
+    # generated-from-config: sha256:5aa5e623…
 
-Пока не поддерживается:
+CI verifies that marker with a single `sha256sum` call. Change the config without regenerating and
+the build turns red with an explanation. No YAML parser is needed inside CI, which is why the same
+mechanism will work for every stack, not just this one.
 
-- стеки **python**, **go**, **java** — конфиг их принимает, но генерация CI для них отказывает явной
-  ошибкой, а не молча;
-- стадии зрелости проекта, ужесточающие проверки по мере его роста;
-- бэкап базы перед миграцией — в спецификации он есть, в коде пока нет.
+The generated pipeline does not depend on the plugin. Clone the repository without Claude Code
+installed and it still builds, tests and deploys — the agent is an accelerator, not a runtime
+dependency.
 
-### Что нужно настроить для выкатки
+## Commands
 
-Выкатка работает не сама по себе: в репозитории должны быть секреты `SSH_KEY` (приватный ключ
-для доступа на сервер) и `REGISTRY_TOKEN` (доступ к registry), а на сервере — установленный
-Docker и пользователь из поля `host`. Для окружения с `auto: false` в настройках репозитория
-у одноимённого GitHub Environment назначаются проверяющие — без этого одобрение не запросится
-и выкатка пройдёт молча.
+| Command | What it does |
+|---|---|
+| `/pipeline:init` | set the pipeline up in a new or existing project |
+| `/pipeline:ship <task>` | branch, test, check, PR, green CI, merge by the project's autonomy mode |
+| `/pipeline:fix-ci` | read the failed run, diagnose the cause, fix it — at most three attempts |
 
-Отпечаток сервера берётся при первом подключении (`ssh-keyscan`). Это защищает от прослушивания,
-но не от подмены хоста в момент самой первой выкатки.
+`/pipeline:fix-ci` does not read the raw log. A parser turns hundreds of lines of timestamps and
+ANSI codes into the failing job, the failing step, the error messages and the command that step
+runs, taken from your config.
 
-## Разработка
+## Autonomy
+
+The `autonomy` field decides who presses merge:
+
+- `full` — the agent merges once CI is green;
+- `merge-gate` — the agent stops at a green PR and you decide;
+- `prod-gate` — the agent merges, and production still waits for your approval.
+
+## Deploying
+
+Set `deploy` in the config and a deploy workflow is generated: build an image tagged with the commit
+SHA, push it, copy the compose file to the server, bring it up, poll the healthcheck, and on failure
+roll back to the previous image and open an issue linking the run.
+
+Environments with `auto: false` go through a GitHub Environment, so production waits for a human.
+
+Three things the agent cannot do for you:
+
+1. add the `SSH_KEY` and `REGISTRY_TOKEN` secrets to the repository;
+2. assign reviewers to the GitHub Environment used by any `auto: false` environment — without them
+   no approval is ever requested and production ships silently;
+3. install Docker on the server and create the user named in `host`.
+
+The server's host key is trusted on first connection (`ssh-keyscan`). That protects against
+eavesdropping but not against host impersonation during the very first deploy. If that matters,
+pin a known host key in a secret instead.
+
+## Current limits
+
+Stated plainly, because a template that oversells itself wastes your time:
+
+- only the **node-ts** stack is generated. `python`, `go` and `java` are valid in the config but
+  generation refuses with an explicit error rather than producing something broken;
+- no maturity stages yet — checks do not tighten on their own as a project grows;
+- no database backup before migrations, though the design calls for one.
+
+## Development
 
     npm install
     npm test
+
+The skill documents under `skills/` are written in Russian: they are read by the agent, not by you.

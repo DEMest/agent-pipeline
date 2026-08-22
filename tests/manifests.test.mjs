@@ -26,13 +26,13 @@ test('каждый скилл, объявленный в репозитории,
   assert.ok(existsSync('skills/pipeline-init/SKILL.md'));
 });
 
-test('README объясняет установку и то, что настройкой занимается агент', () => {
+test('README объясняет установку и то, что настройкой занимается агент, а не человек', () => {
   const readme = readText('README.md');
   assert.match(readme, /plugin marketplace add/);
   assert.match(readme, /pipeline:init/);
   // Утверждение про агента проверяется отдельно: без него тест проходил бы,
-  // даже если бы объяснение «настройкой занимается агент» из README пропало.
-  assert.match(readme, /Настройкой занимается агент/);
+  // даже если бы объяснение из README пропало. README написан по-английски.
+  assert.match(readme, /The agent does the setup, not you/);
 });
 
 test('README ссылается на слэш-команду, реально выводимую из каталога commands/', () => {
@@ -54,16 +54,16 @@ test('README ссылается на слэш-команду, реально в�
 
 test('README честно перечисляет, что пока не поддерживается', () => {
   const readme = readText('README.md');
-  const startIndex = readme.indexOf('Пока не поддерживается');
-  assert.notEqual(startIndex, -1, 'в README должен быть раздел «Пока не поддерживается»');
+  const startIndex = readme.indexOf('Current limits');
+  assert.notEqual(startIndex, -1, 'в README должен быть раздел Current limits');
   const nextHeading = readme.indexOf('\n## ', startIndex);
   const section = nextHeading === -1 ? readme.slice(startIndex) : readme.slice(startIndex, nextHeading);
-  // Названия нереализованных частей ищем именно внутри фрагмента от «Пока не поддерживается»
+  // Названия нереализованных частей ищем именно внутри раздела Current limits,
   // до следующего заголовка того же уровня, а не по всему файлу целиком. Слово может остаться
   // в README, просто переехав в раздел «Работает» — тогда README лжёт (называет нереализованным
   // то, что на самом деле уже работает, или наоборот), а поиск по всему файлу этого не заметит,
   // потому что слово всё ещё где-то есть.
-  for (const missing of ['python', 'стадии зрелости']) {
+  for (const missing of ['python', 'maturity stages']) {
     assert.match(section, new RegExp(missing, 'i'), `README должен упоминать ${missing} среди границ`);
   }
 });
