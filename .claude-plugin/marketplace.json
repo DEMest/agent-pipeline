@@ -1,0 +1,15 @@
+{
+  "name": "agent-pipeline",
+  "description": "Marketplace агентного пайплайна",
+  "owner": {
+    "name": "thetaDEM"
+  },
+  "plugins": [
+    {
+      "name": "pipeline",
+      "description": "Агентный пайплайн: промпт → код → тесты → PR → CI → merge → деплой",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "description": "Агентный пайплайн: промпт → код → тесты → PR → CI → merge → деплой",
+  "version": "0.1.0",
+  "author": {
+    "name": "thetaDEM"
+  },
+  "repository": "https://github.com/DEMest/agent-pipeline",
+  "keywords": [
+    "ci",
+    "cd",
+    "pipeline",
+    "automation"
+  ],
+  "name": "pipeline"
+}
