@@ -5,7 +5,10 @@ import { parse as parseYaml } from 'yaml';
 const STACKS = ['node-ts', 'python', 'go', 'java'];
 const AUTONOMY = ['full', 'merge-gate', 'prod-gate'];
 const STAGES = ['sketch', 'shaping', 'product', 'sustained'];
+// Имена проверок становятся именами функций в sh и ключами диспетчера case.
+// Поэтому они подчиняются синтаксису sh и не могут конфликтовать с ключевыми словами.
 const CHECK_NAME = /^[a-z][a-z0-9_]*$/;
+const RESERVED_CHECK_NAMES = ['all'];
 
 export class ConfigError extends Error {
   constructor(message, field) {
@@ -53,6 +56,9 @@ export function parseConfig(rawText) {
   for (const [name, command] of Object.entries(checks)) {
     if (!CHECK_NAME.test(name)) {
       throw new ConfigError(`checks: имя ${JSON.stringify(name)} не подходит для имени функции sh, ожидается ${CHECK_NAME}`, 'checks');
+    }
+    if (RESERVED_CHECK_NAMES.includes(name)) {
+      throw new ConfigError(`checks: имя ${JSON.stringify(name)} зарезервировано диспетчером для запуска всех проверок сразу`, 'checks');
     }
     if (typeof command !== 'string' || command.trim() === '') {
       throw new ConfigError(`checks.${name}: команда должна быть непустой строкой`, 'checks');

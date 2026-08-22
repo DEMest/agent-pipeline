@@ -50,6 +50,11 @@ test('отвергает имя проверки, непригодное для 
   assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'checks');
 });
 
+test('отвергает проверку с зарезервированным именем all', () => {
+  const bad = VALID.replace('  lint: npm run lint', '  all: npm run all');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'checks');
+});
+
 test('отвергает пустой набор проверок', () => {
   const bad = `
 version: 1

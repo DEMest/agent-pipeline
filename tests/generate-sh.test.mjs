@@ -49,3 +49,9 @@ test('порядок проверок сохраняет порядок ключ
   const reordered = { ...CFG, checks: { lint: 'npm run lint', test: 'npm run test -- --run' } };
   assert.match(generatePipelineSh(reordered, HASH), /^\s+all\) check_lint; check_test ;;$/m);
 });
+
+test('диспетчер all) встречается ровно один раз', () => {
+  const sh = generatePipelineSh(CFG, HASH);
+  const matches = sh.match(/^\s+all\)/m);
+  assert.equal(matches ? matches.length : 0, 1);
+});
