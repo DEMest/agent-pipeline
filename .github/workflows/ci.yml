@@ -1,0 +1,36 @@
+# generated-from-config: sha256:a15da37c98be5548f28016cd704d75ffbbacb62e649847fb36d7365debde36fd
+# Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации.
+name: CI
+on:
+  pull_request: null
+  push:
+    branches:
+      - main
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сверить артефакты с конфигом
+        run: |-
+          expected=$(sha256sum .pipeline/config.yml | cut -d " " -f 1)
+          status=0
+          for f in .github/workflows/ci.yml scripts/pipeline.sh; do
+            actual=$(sed -n "s/^# generated-from-config: sha256://p" "$f" | head -n 1)
+            if [ "$actual" != "$expected" ]; then
+              echo "::error file=$f::артефакт не соответствует .pipeline/config.yml, перегенерируйте пайплайн"
+              status=1
+            fi
+          done
+          exit $status
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: test
+        run: sh scripts/pipeline.sh test
