@@ -54,10 +54,16 @@ test('README ссылается на слэш-команду, реально в�
 
 test('README честно перечисляет, что пока не поддерживается', () => {
   const readme = readText('README.md');
-  assert.match(readme, /Пока не поддерживается/);
-  // Названия нереализованных частей: если какую-то из них построят, строку нужно убрать
-  // осознанно, а не оставить README обещающим то, чего нет, или отрицающим то, что есть.
-  for (const missing of ['python', 'деплой', 'ship']) {
-    assert.match(readme, new RegExp(missing, 'i'), `README должен упоминать ${missing} среди границ`);
+  const startIndex = readme.indexOf('Пока не поддерживается');
+  assert.notEqual(startIndex, -1, 'в README должен быть раздел «Пока не поддерживается»');
+  const nextHeading = readme.indexOf('\n## ', startIndex);
+  const section = nextHeading === -1 ? readme.slice(startIndex) : readme.slice(startIndex, nextHeading);
+  // Названия нереализованных частей ищем именно внутри фрагмента от «Пока не поддерживается»
+  // до следующего заголовка того же уровня, а не по всему файлу целиком. Слово может остаться
+  // в README, просто переехав в раздел «Работает» — тогда README лжёт (называет нереализованным
+  // то, что на самом деле уже работает, или наоборот), а поиск по всему файлу этого не заметит,
+  // потому что слово всё ещё где-то есть.
+  for (const missing of ['python', 'деплой']) {
+    assert.match(section, new RegExp(missing, 'i'), `README должен упоминать ${missing} среди границ`);
   }
 });
