@@ -109,3 +109,40 @@ test('ci-doctor различает поломку кода и поломку с�
 test('команда fix-ci ссылается на скилл ci-doctor', () => {
   assert.match(readText('commands/fix-ci.md'), /pipeline-ci-doctor/);
 });
+
+const SHIP = () => readText('skills/pipeline-ship/SKILL.md');
+
+test('у скилла ship есть frontmatter с именем и описанием', () => {
+  const text = SHIP();
+  assert.match(text, /^---\n/);
+  const fm = frontmatter(text);
+  assert.match(fm, /^name: pipeline-ship$/m);
+  assert.match(fm, /^description: .+$/m);
+});
+
+test('ship прогоняет локальные проверки до пуша, а не полагается на CI', () => {
+  assert.match(SHIP(), /pipeline\.sh/);
+});
+
+test('ship разбирает все три режима автономности', () => {
+  const text = SHIP();
+  for (const mode of ['full', 'merge-gate', 'prod-gate']) {
+    assert.match(text, new RegExp(`\`${mode}\``), `режим ${mode} должен быть описан`);
+  }
+});
+
+test('ship честно говорит, что деплой ещё не реализован', () => {
+  assert.match(SHIP(), /деплой (пока )?не (реализован|настроен)/i);
+});
+
+test('ship передаёт красный CI скиллу ci-doctor, а не чинит сам', () => {
+  assert.match(SHIP(), /pipeline-ci-doctor/);
+});
+
+test('ship не мерджит, пока проверки не зелёные', () => {
+  assert.match(SHIP(), /gh pr checks/);
+});
+
+test('команда ship ссылается на скилл', () => {
+  assert.match(readText('commands/ship.md'), /pipeline-ship/);
+});
