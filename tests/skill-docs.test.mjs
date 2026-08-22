@@ -36,6 +36,16 @@ test('скилл использует переменную CLAUDE_PLUGIN_ROOT в
   assert.match(text, /\$\{CLAUDE_PLUGIN_ROOT\}\/src\/cli\.mjs/);
 });
 
+test('скилл не затирает существующий .claude/settings.json проекта, а дописывает его', () => {
+  const text = SKILL();
+  // Основной сценарий из README — существующий проект, где .claude/settings.json может
+  // быть со своими хуками и правами. Слепое копирование шаблона поверх него их бы стёрло.
+  assert.match(text, /если.{0,40}(файл|settings\.json).{0,60}(нет|отсутствует)/is);
+  assert.match(text, /(если|когда).{0,60}(файл|settings\.json).{0,60}(есть|существует|уже)/is);
+  assert.match(text, /SessionStart/);
+  assert.match(text, /показать человеку/i);
+});
+
 test('скилл завершается зелёным CI, а не записью файлов', () => {
   const text = SKILL();
   assert.match(text, /gh pr checks/);
