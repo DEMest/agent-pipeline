@@ -16,6 +16,11 @@ const RESERVED_CHECK_NAMES = {
   all: 'оно совпадает с агрегатной веткой диспетчера, запускающей все проверки сразу',
   esac: 'оно закрывает конструкцию case и ломает разбор всего скрипта',
 };
+// Единственные поля верхнего уровня, которые понимает конфиг. Опечатка вроде
+// requred: вместо required: иначе неотличима от намеренного отсутствия поля —
+// required ?? [] тихо превращал бы её в пустой список, required-check выключался
+// молча, и упавший тест не мешал бы CI быть зелёным.
+const KNOWN_TOP_LEVEL_KEYS = new Set(['version', 'project', 'autonomy', 'stage', 'checks', 'required']);
 
 export class ConfigError extends Error {
   constructor(message, field) {
@@ -41,6 +46,14 @@ export function parseConfig(rawText) {
   if (doc === null || typeof doc !== 'object') {
     throw new ConfigError('конфиг пуст или не является объектом', 'root');
   }
+  for (const key of Object.keys(doc)) {
+    if (!KNOWN_TOP_LEVEL_KEYS.has(key)) {
+      throw new ConfigError(
+        `неизвестное поле верхнего уровня: ${JSON.stringify(key)} (допустимы: ${[...KNOWN_TOP_LEVEL_KEYS].join(', ')})`,
+        'root',
+      );
+    }
+  }
   if (doc.version !== 1) {
     throw new ConfigError(`version: поддерживается только 1, получено ${JSON.stringify(doc.version)}`, 'version');
   }
@@ -57,6 +70,13 @@ export function parseConfig(rawText) {
   requireOneOf(doc.stage, STAGES, 'stage');
 
   const checks = doc.checks;
+  if (Array.isArray(checks)) {
+    // Массив тоже typeof === 'object' и не пуст, поэтому без этой проверки код
+    // проваливался в цикл по Object.entries и падал позже с сообщением про
+    // непригодное имя функции ("0", "1", ...) — верным, но вводящим в заблуждение
+    // о настоящей причине.
+    throw new ConfigError('checks: ожидается объект «имя: команда», получен список', 'checks');
+  }
   if (!checks || typeof checks !== 'object' || Object.keys(checks).length === 0) {
     throw new ConfigError('checks: нужна хотя бы одна проверка', 'checks');
   }
@@ -72,9 +92,16 @@ export function parseConfig(rawText) {
     }
   }
 
-  const required = doc.required ?? [];
+  // required обязателен и не может быть пустым: иначе отсутствие поля или опечатка
+  // (requred:) молча превращались бы в пустой список, ни одна проверка не становилась
+  // бы обязательной, и CI с этим конфигом физически не мог бы покраснеть даже при
+  // падающих тестах — ровно противоположность назначению продукта.
+  const required = doc.required;
   if (!Array.isArray(required)) {
-    throw new ConfigError('required: ожидается список', 'required');
+    throw new ConfigError('required: обязательное поле, ожидается непустой список имён из checks', 'required');
+  }
+  if (required.length === 0) {
+    throw new ConfigError('required: нужна хотя бы одна обязательная проверка', 'required');
   }
   for (const name of required) {
     if (!Object.hasOwn(checks, name)) {
@@ -96,5 +123,10 @@ export function loadConfig(configPath) {
 }
 
 export function configHash(rawText) {
-  return createHash('sha256').update(rawText, 'utf8').digest('hex');
+  // На Windows-клоне текст .pipeline/config.yml приходит с CRLF (см. .gitattributes),
+  // а сгенерированный workflow сверяет хеш по байтам файла командой sha256sum. Чтобы
+  // один и тот же смысл конфига не давал разный хеш из-за перевода строк, нормализуем
+  // CRLF к LF перед хешированием — так же, как это делает DRIFT_SCRIPT в generate-ci.mjs.
+  const normalized = rawText.replace(/\r\n/g, '\n');
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }

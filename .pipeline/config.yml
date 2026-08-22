@@ -1,0 +1,12 @@
+# Этот файл ведёт агент. Правки руками допустимы, но основной путь —
+# сказать агенту: /pipeline:reconfigure
+version: 1
+project:
+  name: agent-pipeline
+  stack: node-ts
+  goal: "Каркас агентного пайплайна: генератор, плагин, шаблоны"
+autonomy: merge-gate
+stage: shaping
+checks:
+  test: npm test
+required: [test]

@@ -31,8 +31,14 @@ test('запускается на pull_request и на push в main', () => {
 test('drift-check сверяет хеш конфига без парсинга YAML', () => {
   const doc = parseYaml(generateCi(CFG, HASH));
   const script = doc.jobs['drift-check'].steps.map((s) => s.run ?? '').join('\n');
-  assert.match(script, /sha256sum \.pipeline\/config\.yml/);
+  assert.match(script, /\.pipeline\/config\.yml.*sha256sum/);
   assert.match(script, /generated-from-config/);
+});
+
+test('drift-check считает хеш конфига нечувствительно к CR, чтобы не краснеть на Windows-клоне', () => {
+  const doc = parseYaml(generateCi(CFG, HASH));
+  const script = doc.jobs['drift-check'].steps.map((s) => s.run ?? '').join('\n');
+  assert.match(script, /tr -d '\\r' < \.pipeline\/config\.yml \| sha256sum/);
 });
 
 test('обязательная проверка не помечена continue-on-error', () => {

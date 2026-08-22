@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 
 test('манифест плагина содержит имя pipeline и версию', () => {
   const m = JSON.parse(readFileSync('.claude-plugin/plugin.json', 'utf8'));
@@ -32,6 +32,23 @@ test('README объясняет установку и то, что настро�
   // Утверждение про агента проверяется отдельно: без него тест проходил бы,
   // даже если бы объяснение «настройкой занимается агент» из README пропало.
   assert.match(readme, /Настройкой занимается агент/);
+});
+
+test('README ссылается на слэш-команду, реально выводимую из каталога commands/', () => {
+  // Имя слэш-команды Claude Code выводит из имени файла: commands/<file>.md в плагине
+  // <name> даёт /<name>:<file>. Здесь это имя вычисляется из фактического содержимого
+  // каталога commands/ и манифеста плагина, а не переписывается как ожидание руками —
+  // иначе тест верен при любой реальности файла, что и было дефектом раньше.
+  const pluginName = JSON.parse(readFileSync('.claude-plugin/plugin.json', 'utf8')).name;
+  const commandFiles = readdirSync('commands').filter((f) => f.endsWith('.md'));
+  const initFile = commandFiles.find((f) => f.replace(/\.md$/, '') === 'init');
+  assert.ok(
+    initFile,
+    `в commands/ должен быть файл init.md, дающий команду /${pluginName}:init; найдены: ${commandFiles.join(', ')}`,
+  );
+  const commandName = `/${pluginName}:${initFile.replace(/\.md$/, '')}`;
+  const readme = readFileSync('README.md', 'utf8');
+  assert.ok(readme.includes(commandName), `README должен содержать ${commandName}`);
 });
 
 test('README честно перечисляет, что пока не поддерживается', () => {

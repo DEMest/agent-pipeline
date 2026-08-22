@@ -59,16 +59,37 @@ Init считается завершённым не когда файлы зап
 - `{{AUTONOMY}}` — получен в Шаге 3.
 - `{{STAGE}}` — для нового проекта всегда `sketch`.
 
-Заполнить `templates/common/config.yml.tmpl`, записать в `.pipeline/config.yml`, затем:
+Заполнить `templates/common/config.yml.tmpl`, записать в `.pipeline/config.yml`, затем перед вызовом
+генератора проверить, установлена ли его зависимость, и поставить при отсутствии:
 
-    node <plugin>/src/cli.mjs generate .
+    test -d "${CLAUDE_PLUGIN_ROOT}/node_modules/yaml" || npm install --omit=dev --prefix "${CLAUDE_PLUGIN_ROOT}"
+
+Плагин попадает на диск клонированием репозитория, а `node_modules/` в `.gitignore` — зависимости
+с ним не приезжают. Без этой установки первый же вызов генератора падает с
+`ERR_MODULE_NOT_FOUND: Cannot find package 'yaml'`. Установка нужна один раз: при повторных запусках
+`node_modules/yaml` уже на месте, и команда ничего не делает. `${CLAUDE_PLUGIN_ROOT}` — переменная,
+которую Claude Code сам подставляет плагинам; путь плагина не нужно угадывать.
+
+    node "${CLAUDE_PLUGIN_ROOT}/src/cli.mjs" generate .
 
 Для пустого проекта скопировать `templates/stacks/node-ts/smoke.test.mjs`, чтобы CI был зелёным
 до появления первой фичи.
 
-Скопировать `templates/common/claude-settings.json` в `.claude/settings.json` проекта и
-`templates/common/hooks/pipeline-status.sh` в `.claude/hooks/`, чтобы следующий человек, открывший
-проект, увидел состояние пайплайна без единой команды.
+Настройки проекта: основной сценарий из README — существующий проект, где `.claude/settings.json`
+уже может быть, со своими хуками и правами, которые нельзя терять слепым копированием шаблона
+поверх.
+
+- Если файла `.claude/settings.json` в проекте нет — скопировать `templates/common/claude-settings.json`
+  как есть.
+- Если файл уже существует — не перезаписывать его. Прочитать существующий JSON, добавить в его
+  `hooks.SessionStart` запись из шаблона (создав секцию `hooks.SessionStart`, если её не было),
+  сохранив остальные хуки, права и прочие настройки проекта нетронутыми.
+
+В обоих случаях показать человеку, что именно изменилось в `.claude/settings.json` — новый файл
+целиком либо только добавленную запись, — прежде чем продолжать.
+
+Скопировать `templates/common/hooks/pipeline-status.sh` в `.claude/hooks/`, чтобы следующий человек,
+открывший проект, увидел состояние пайплайна без единой команды.
 
 ## Шаг 5. Доказательство
 
