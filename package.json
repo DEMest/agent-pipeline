@@ -1,0 +1,13 @@
+{
+  "name": "agent-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Генератор пайплайна и плагин Claude Code",
+  "scripts": {
+    "test": "node --test tests/*.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  }
+}
