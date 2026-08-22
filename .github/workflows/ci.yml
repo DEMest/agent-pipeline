@@ -1,4 +1,4 @@
-# generated-from-config: sha256:d4211995483a45b9360db5286114d44f5dd80f8a57bd2218180c2192e706f189
+# generated-from-config: sha256:a15da37c98be5548f28016cd704d75ffbbacb62e649847fb36d7365debde36fd
 # Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации.
 name: CI
 on:
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Сверить артефакты с конфигом
         run: |-
-          expected=$(sha256sum .pipeline/config.yml | cut -d " " -f 1)
+          expected=$(tr -d '\r' < .pipeline/config.yml | sha256sum | cut -d " " -f 1)
           status=0
           for f in .github/workflows/ci.yml scripts/pipeline.sh; do
             actual=$(sed -n "s/^# generated-from-config: sha256://p" "$f" | head -n 1)
