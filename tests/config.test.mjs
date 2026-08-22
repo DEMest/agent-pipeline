@@ -55,6 +55,11 @@ test('отвергает проверку с зарезервированным 
   assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'checks');
 });
 
+test('отвергает проверку с зарезервированным именем esac', () => {
+  const bad = VALID.replace('  lint: npm run lint', '  esac: npm run esac');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'checks');
+});
+
 test('отвергает пустой набор проверок', () => {
   const bad = `
 version: 1

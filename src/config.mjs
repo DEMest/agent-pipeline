@@ -6,9 +6,10 @@ const STACKS = ['node-ts', 'python', 'go', 'java'];
 const AUTONOMY = ['full', 'merge-gate', 'prod-gate'];
 const STAGES = ['sketch', 'shaping', 'product', 'sustained'];
 // Имена проверок становятся именами функций в sh и ключами диспетчера case.
-// Поэтому они подчиняются синтаксису sh и не могут конфликтовать с ключевыми словами.
+// Два имени зарезервированы: 'all' совпадает с агрегатной веткой диспетчера,
+// 'esac' закрывает конструкцию case и ломает разбор всего скрипта.
 const CHECK_NAME = /^[a-z][a-z0-9_]*$/;
-const RESERVED_CHECK_NAMES = ['all'];
+const RESERVED_CHECK_NAMES = ['all', 'esac'];
 
 export class ConfigError extends Error {
   constructor(message, field) {
