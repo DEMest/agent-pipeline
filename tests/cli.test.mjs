@@ -192,3 +192,72 @@ test('диагноз по несуществующему файлу лога с�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const CONFIG_WITH_DEPLOY = `
+version: 1
+project:
+  name: my-app
+  stack: node-ts
+  goal: "пример"
+autonomy: prod-gate
+stage: product
+checks:
+  test: npm run test -- --run
+required: [test]
+deploy:
+  target: docker-vps
+  registry: ghcr.io/owner/my-app
+  environments:
+    production: { host: deploy@example.com, url: "https://example.com", auto: false }
+  healthcheck: { path: /healthz, timeout_sec: 30 }
+  secrets: [SSH_KEY, REGISTRY_TOKEN]
+`;
+
+test('с секцией deploy пишется третий артефакт', () => {
+  const dir = makeProject(CONFIG_WITH_DEPLOY);
+  try {
+    const { written } = generateInto(dir);
+    assert.ok(written.some((p) => p.endsWith('deploy.yml')), `deploy.yml не записан: ${written.join(', ')}`);
+    assert.equal(checkDrift(dir).ok, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('без секции deploy workflow выкатки не создаётся', () => {
+  const dir = makeProject();
+  try {
+    const { written } = generateInto(dir);
+    assert.equal(written.some((p) => p.endsWith('deploy.yml')), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('правка конфига без перегенерации делает устаревшим и workflow выкатки', () => {
+  const dir = makeProject(CONFIG_WITH_DEPLOY);
+  try {
+    generateInto(dir);
+    writeFileSync(join(dir, '.pipeline', 'config.yml'), `${CONFIG_WITH_DEPLOY}\n# правка\n`, 'utf8');
+    const { ok, stale } = checkDrift(dir);
+    assert.equal(ok, false);
+    assert.ok(stale.some((p) => p.endsWith('deploy.yml')), `deploy.yml не отмечен устаревшим: ${stale.join(', ')}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('оставшийся deploy.yml замечается, даже если секцию deploy убрали из конфига', () => {
+  // Иначе забытый workflow продолжил бы выкатывать прод по правилам,
+  // которых в конфиге больше нет.
+  const dir = makeProject(CONFIG_WITH_DEPLOY);
+  try {
+    generateInto(dir);
+    writeFileSync(join(dir, '.pipeline', 'config.yml'), CONFIG_TEXT, 'utf8');
+    const { ok, stale } = checkDrift(dir);
+    assert.equal(ok, false);
+    assert.ok(stale.some((p) => p.endsWith('deploy.yml')));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

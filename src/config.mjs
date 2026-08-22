@@ -147,8 +147,22 @@ function validateDeploy(deploy) {
     if (!env || typeof env !== 'object' || Array.isArray(env)) {
       throw new ConfigError(`deploy.environments.${name}: ожидается объект`, 'deploy.environments');
     }
-    if (typeof env.host !== 'string' || env.host.trim() === '') {
-      throw new ConfigError(`deploy.environments.${name}.host: непустая строка обязательна`, 'deploy.environments');
+    // host — назначение для ssh, поэтому включает пользователя: без него ssh пойдёт
+    // под учётной записью раннера, которой на сервере нет.
+    if (typeof env.host !== 'string' || !/^[^@\s]+@[^@\s]+$/.test(env.host)) {
+      throw new ConfigError(
+        `deploy.environments.${name}.host: ожидается назначение ssh вида пользователь@хост`,
+        'deploy.environments',
+      );
+    }
+    // url — то, что опрашивает healthcheck. Отдельно от host, потому что схема и порт
+    // проверки не выводятся из адреса ssh: сервис может слушать http, другой порт
+    // или отвечать на домене, отличном от того, куда мы ходим по ssh.
+    if (typeof env.url !== 'string' || !/^https?:\/\/./.test(env.url)) {
+      throw new ConfigError(
+        `deploy.environments.${name}.url: ожидается адрес вида http://… или https://…`,
+        'deploy.environments',
+      );
     }
     // auto указывается явно: молчаливый выбор здесь означал бы выкатку на прод
     // без ведома человека либо её отсутствие там, где её ждут.

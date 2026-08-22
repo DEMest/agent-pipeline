@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig, configHash } from './config.mjs';
 import { generatePipelineSh } from './generate-sh.mjs';
 import { generateCi } from './generate-ci.mjs';
+import { generateDeploy } from './generate-deploy.mjs';
 import { parseFailedLog, describeFailures } from './ci-log.mjs';
 
 const MARKER = '# generated-from-config: sha256:';
@@ -13,6 +14,7 @@ function artifactPaths(projectDir) {
     configPath: join(projectDir, '.pipeline', 'config.yml'),
     shPath: join(projectDir, 'scripts', 'pipeline.sh'),
     ciPath: join(projectDir, '.github', 'workflows', 'ci.yml'),
+    deployPath: join(projectDir, '.github', 'workflows', 'deploy.yml'),
   };
 }
 
@@ -22,7 +24,7 @@ function writeFileLf(path, text) {
 }
 
 export function generateInto(projectDir) {
-  const { configPath, shPath, ciPath } = artifactPaths(projectDir);
+  const { configPath, shPath, ciPath, deployPath } = artifactPaths(projectDir);
   const config = loadConfig(configPath);
   const hash = configHash(readFileSync(configPath, 'utf8'));
 
@@ -31,19 +33,40 @@ export function generateInto(projectDir) {
   // был на диске к этому моменту, в проекте остались бы половина артефактов.
   const shText = generatePipelineSh(config, hash);
   const ciText = generateCi(config, hash);
+  // Секция deploy необязательна: без неё workflow выкатки не нужен и не создаётся.
+  const deployText = generateDeploy(config, hash);
 
   writeFileLf(shPath, shText);
   writeFileLf(ciPath, ciText);
 
-  return { written: [shPath, ciPath], hash };
+  const written = [shPath, ciPath];
+  if (deployText !== null) {
+    writeFileLf(deployPath, deployText);
+    written.push(deployPath);
+  }
+
+  return { written, hash };
 }
 
 export function checkDrift(projectDir) {
-  const { configPath, shPath, ciPath } = artifactPaths(projectDir);
+  const { configPath, shPath, ciPath, deployPath } = artifactPaths(projectDir);
   const expected = configHash(readFileSync(configPath, 'utf8'));
   const stale = [];
 
-  for (const path of [shPath, ciPath]) {
+  // Workflow выкатки проверяется, когда конфиг его требует или когда файл уже
+  // лежит в проекте. Второе важно не меньше первого: если секцию deploy убрали,
+  // а сгенерированный ранее deploy.yml остался, он продолжит выкатывать прод
+  // по правилам, которых в конфиге больше нет.
+  const paths = [shPath, ciPath];
+  let wantsDeploy = existsSync(deployPath);
+  try {
+    wantsDeploy = wantsDeploy || Boolean(loadConfig(configPath).deploy);
+  } catch {
+    // Сломанный конфиг — забота других проверок, не этой.
+  }
+  if (wantsDeploy) paths.push(deployPath);
+
+  for (const path of paths) {
     if (!existsSync(path)) {
       stale.push(path);
       continue;

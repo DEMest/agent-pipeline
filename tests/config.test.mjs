@@ -156,8 +156,8 @@ deploy:
   target: docker-vps
   registry: ghcr.io/owner/my-app
   environments:
-    staging: { host: staging.example.com, auto: true }
-    production: { host: example.com, auto: false }
+    staging: { host: deploy@staging.example.com, url: "https://staging.example.com", auto: true }
+    production: { host: deploy@example.com, url: "https://example.com", auto: false }
   healthcheck: { path: /healthz, timeout_sec: 60 }
   secrets: [SSH_KEY, REGISTRY_TOKEN]
 `;
@@ -179,7 +179,7 @@ test('отвергает неизвестную цель выкатки', () => 
 });
 
 test('отвергает окружение без явного auto', () => {
-  const bad = WITH_DEPLOY.replace('{ host: example.com, auto: false }', '{ host: example.com }');
+  const bad = WITH_DEPLOY.replace('auto: false }', '}');
   assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.environments');
 });
 
