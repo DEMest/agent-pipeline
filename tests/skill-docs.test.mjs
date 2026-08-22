@@ -2,13 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readText } from './read-text.mjs';
 
+// Достаёт содержимое frontmatter-блока в самом начале файла (между первой парой строк
+// «---»). Проверка description именно внутри этого блока, а не где угодно в тексте, —
+// иначе строка `description: ...` в теле документа (например, в примере команды) тоже
+// засчиталась бы как валидный frontmatter.
+function frontmatter(text) {
+  const match = text.match(/^---\n([\s\S]*?)\n---\n/);
+  assert.ok(match, 'файл должен начинаться с frontmatter-блока (--- ... ---)');
+  return match[1];
+}
+
 const SKILL = () => readText('skills/pipeline-init/SKILL.md');
 
 test('у скилла есть frontmatter с name и description', () => {
   const text = SKILL();
   assert.match(text, /^---\n/);
-  assert.match(text, /^name: pipeline-init$/m);
-  assert.match(text, /^description: .+$/m);
+  const fm = frontmatter(text);
+  assert.match(fm, /^name: pipeline-init$/m);
+  assert.match(fm, /^description: .+$/m);
 });
 
 test('скилл требует три проверки окружения из спецификации', () => {
@@ -60,8 +71,9 @@ const DOCTOR = () => readText('skills/pipeline-ci-doctor/SKILL.md');
 test('у скилла ci-doctor есть frontmatter с именем и описанием', () => {
   const text = DOCTOR();
   assert.match(text, /^---\n/);
-  assert.match(text, /^name: pipeline-ci-doctor$/m);
-  assert.match(text, /^description: .+$/m);
+  const fm = frontmatter(text);
+  assert.match(fm, /^name: pipeline-ci-doctor$/m);
+  assert.match(fm, /^description: .+$/m);
 });
 
 test('ci-doctor получает диагноз командой diagnose, а не читает сырой лог глазами', () => {
@@ -72,6 +84,22 @@ test('ci-doctor ограничивает число попыток тремя', 
   const text = DOCTOR();
   assert.match(text, /три попытки|3 попытки/i);
   assert.match(text, /gh pr comment/, 'счётчик попыток должен фиксироваться комментарием к PR');
+});
+
+test('ci-doctor проверяет счётчик попыток раньше, чем получает диагноз', () => {
+  const text = DOCTOR();
+  // Дефект из ревью: указание прочитать прошлые попытки стояло в шаге 4 — после того как
+  // агент уже успевал продиагностировать и запушить исправление. Проверка счётчика должна
+  // стоять раньше по тексту, чем команда получения диагноза, иначе документ не остановит
+  // четвёртую попытку вовремя.
+  const counterCheckIndex = text.search(/Выгрузить тела всех комментариев к PR/);
+  const diagnoseIndex = text.search(/cli\.mjs diagnose/);
+  assert.notEqual(counterCheckIndex, -1, 'в скилле должно быть указание читать комментарии к PR для подсчёта попыток');
+  assert.notEqual(diagnoseIndex, -1, 'в скилле должна быть команда получения диагноза');
+  assert.ok(
+    counterCheckIndex < diagnoseIndex,
+    'проверка счётчика попыток должна стоять в тексте раньше получения диагноза'
+  );
 });
 
 test('ci-doctor различает поломку кода и поломку самого пайплайна', () => {
