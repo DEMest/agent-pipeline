@@ -150,3 +150,57 @@ test('.gitattributes закрепляет LF за .pipeline/config.yml', () => {
   const attrs = readText('.gitattributes');
   assert.match(attrs, /^\.pipeline\/config\.yml\s+text\s+eol=lf$/m);
 });
+
+const WITH_DEPLOY = `${VALID}
+deploy:
+  target: docker-vps
+  registry: ghcr.io/owner/my-app
+  environments:
+    staging: { host: staging.example.com, auto: true }
+    production: { host: example.com, auto: false }
+  healthcheck: { path: /healthz, timeout_sec: 60 }
+  secrets: [SSH_KEY, REGISTRY_TOKEN]
+`;
+
+test('принимает корректную секцию deploy', () => {
+  const cfg = parseConfig(WITH_DEPLOY);
+  assert.equal(cfg.deploy.target, 'docker-vps');
+  assert.equal(cfg.deploy.environments.production.auto, false);
+  assert.equal(cfg.deploy.healthcheck.timeout_sec, 60);
+});
+
+test('конфиг без секции deploy остаётся валидным', () => {
+  assert.equal(parseConfig(VALID).deploy, undefined);
+});
+
+test('отвергает неизвестную цель выкатки', () => {
+  const bad = WITH_DEPLOY.replace('target: docker-vps', 'target: kubernetes');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.target');
+});
+
+test('отвергает окружение без явного auto', () => {
+  const bad = WITH_DEPLOY.replace('{ host: example.com, auto: false }', '{ host: example.com }');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.environments');
+});
+
+test('отвергает healthcheck без ведущего слэша в пути', () => {
+  const bad = WITH_DEPLOY.replace('path: /healthz', 'path: healthz');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.healthcheck');
+});
+
+test('отвергает нулевой или отрицательный таймаут healthcheck', () => {
+  const bad = WITH_DEPLOY.replace('timeout_sec: 60', 'timeout_sec: 0');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.healthcheck');
+});
+
+test('отвергает значение секрета там, где ожидается имя', () => {
+  // Настоящий токен в коммитящемся конфиге — утечка. Формат имени переменной
+  // отсеивает его до того, как он попадёт в историю репозитория.
+  const bad = WITH_DEPLOY.replace('[SSH_KEY, REGISTRY_TOKEN]', '["ghp_A1b2C3d4E5f6G7h8"]');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.secrets');
+});
+
+test('отвергает пустой список окружений', () => {
+  const bad = WITH_DEPLOY.replace(/  environments:\n(    .*\n)+/, '  environments: {}\n');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.environments');
+});

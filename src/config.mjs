@@ -20,7 +20,12 @@ const RESERVED_CHECK_NAMES = {
 // requred: вместо required: иначе неотличима от намеренного отсутствия поля —
 // required ?? [] тихо превращал бы её в пустой список, required-check выключался
 // молча, и упавший тест не мешал бы CI быть зелёным.
-const KNOWN_TOP_LEVEL_KEYS = new Set(['version', 'project', 'autonomy', 'stage', 'checks', 'required']);
+const KNOWN_TOP_LEVEL_KEYS = new Set(['version', 'project', 'autonomy', 'stage', 'checks', 'required', 'deploy']);
+const DEPLOY_TARGETS = ['docker-vps'];
+// Секреты в конфиге — только имена переменных, значения живут в GitHub Secrets.
+// Конфиг коммитится, поэтому формат имени проверяется строго: настоящий токен
+// почти наверняка содержит символы вне этого набора и будет отвергнут до коммита.
+const SECRET_NAME = /^[A-Z][A-Z0-9_]*$/;
 
 export class ConfigError extends Error {
   constructor(message, field) {
@@ -109,7 +114,79 @@ export function parseConfig(rawText) {
     }
   }
 
+  validateDeploy(doc.deploy);
+
   return { ...doc, required };
+}
+
+// Секция deploy необязательна: проект может жить без выкатки. Но если она есть,
+// проверяется строго — ошибка в ней обнаружится иначе в момент выкатки на прод,
+// то есть в худшую из возможных минут.
+function validateDeploy(deploy) {
+  if (deploy === undefined) return;
+  if (deploy === null || typeof deploy !== 'object' || Array.isArray(deploy)) {
+    throw new ConfigError('deploy: ожидается объект', 'deploy');
+  }
+
+  if (!DEPLOY_TARGETS.includes(deploy.target)) {
+    throw new ConfigError(
+      `deploy.target: ожидалось одно из ${DEPLOY_TARGETS.join(', ')}, получено ${JSON.stringify(deploy.target)}`,
+      'deploy.target',
+    );
+  }
+  if (typeof deploy.registry !== 'string' || deploy.registry.trim() === '') {
+    throw new ConfigError('deploy.registry: непустая строка обязательна', 'deploy.registry');
+  }
+
+  const environments = deploy.environments;
+  if (!environments || typeof environments !== 'object' || Array.isArray(environments)
+      || Object.keys(environments).length === 0) {
+    throw new ConfigError('deploy.environments: нужно хотя бы одно окружение', 'deploy.environments');
+  }
+  for (const [name, env] of Object.entries(environments)) {
+    if (!env || typeof env !== 'object' || Array.isArray(env)) {
+      throw new ConfigError(`deploy.environments.${name}: ожидается объект`, 'deploy.environments');
+    }
+    if (typeof env.host !== 'string' || env.host.trim() === '') {
+      throw new ConfigError(`deploy.environments.${name}.host: непустая строка обязательна`, 'deploy.environments');
+    }
+    // auto указывается явно: молчаливый выбор здесь означал бы выкатку на прод
+    // без ведома человека либо её отсутствие там, где её ждут.
+    if (typeof env.auto !== 'boolean') {
+      throw new ConfigError(
+        `deploy.environments.${name}.auto: нужно явное true или false`,
+        'deploy.environments',
+      );
+    }
+  }
+
+  const healthcheck = deploy.healthcheck;
+  if (!healthcheck || typeof healthcheck !== 'object' || Array.isArray(healthcheck)) {
+    throw new ConfigError('deploy.healthcheck: ожидается объект с полями path и timeout_sec', 'deploy.healthcheck');
+  }
+  if (typeof healthcheck.path !== 'string' || !healthcheck.path.startsWith('/')) {
+    throw new ConfigError('deploy.healthcheck.path: путь должен начинаться с /', 'deploy.healthcheck');
+  }
+  if (!Number.isInteger(healthcheck.timeout_sec) || healthcheck.timeout_sec <= 0) {
+    throw new ConfigError('deploy.healthcheck.timeout_sec: нужно целое число секунд больше нуля', 'deploy.healthcheck');
+  }
+
+  if (deploy.backup_before_migrate !== undefined && typeof deploy.backup_before_migrate !== 'boolean') {
+    throw new ConfigError('deploy.backup_before_migrate: ожидается true или false', 'deploy.backup_before_migrate');
+  }
+
+  const secrets = deploy.secrets ?? [];
+  if (!Array.isArray(secrets)) {
+    throw new ConfigError('deploy.secrets: ожидается список имён', 'deploy.secrets');
+  }
+  for (const name of secrets) {
+    if (typeof name !== 'string' || !SECRET_NAME.test(name)) {
+      throw new ConfigError(
+        `deploy.secrets: ${JSON.stringify(name)} не похоже на имя переменной — здесь перечисляются имена секретов, а не их значения`,
+        'deploy.secrets',
+      );
+    }
+  }
 }
 
 export function loadConfig(configPath) {
