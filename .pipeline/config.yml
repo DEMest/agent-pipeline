@@ -10,3 +10,5 @@ stage: shaping
 checks:
   test: npm test
 required: [test]
+
+# намеренная правка для проверки drift-check
