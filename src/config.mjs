@@ -96,5 +96,10 @@ export function loadConfig(configPath) {
 }
 
 export function configHash(rawText) {
-  return createHash('sha256').update(rawText, 'utf8').digest('hex');
+  // На Windows-клоне текст .pipeline/config.yml приходит с CRLF (см. .gitattributes),
+  // а сгенерированный workflow сверяет хеш по байтам файла командой sha256sum. Чтобы
+  // один и тот же смысл конфига не давал разный хеш из-за перевода строк, нормализуем
+  // CRLF к LF перед хешированием — так же, как это делает DRIFT_SCRIPT в generate-ci.mjs.
+  const normalized = rawText.replace(/\r\n/g, '\n');
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }

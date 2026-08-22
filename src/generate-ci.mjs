@@ -17,7 +17,11 @@ const SETUP_STEPS = {
 };
 
 const DRIFT_SCRIPT = [
-  'expected=$(sha256sum .pipeline/config.yml | cut -d " " -f 1)',
+  // tr -d '\r' убирает CR перед хешированием: на Windows-клоне .gitattributes отдаёт
+  // .pipeline/config.yml с CRLF, а голый sha256sum хеширует байты файла как есть — тот же
+  // конфиг давал бы разный хеш только из-за перевода строк. configHash в src/config.mjs
+  // нормализует CRLF к LF тем же способом, поэтому оба хеша совпадают.
+  'expected=$(tr -d \'\\r\' < .pipeline/config.yml | sha256sum | cut -d " " -f 1)',
   'status=0',
   'for f in .github/workflows/ci.yml scripts/pipeline.sh; do',
   '  actual=$(sed -n "s/^# generated-from-config: sha256://p" "$f" | head -n 1)',

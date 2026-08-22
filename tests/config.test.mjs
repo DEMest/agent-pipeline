@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { parseConfig, configHash, ConfigError } from '../src/config.mjs';
 
 const VALID = `
@@ -98,4 +99,16 @@ test('хеш стабилен и имеет длину 64', () => {
 
 test('хеш меняется при изменении текста', () => {
   assert.notEqual(configHash(VALID), configHash(VALID + '\n# комментарий\n'));
+});
+
+test('хеш не зависит от перевода строк: LF и CRLF одного содержимого дают одно значение', () => {
+  const lf = VALID;
+  const crlf = VALID.replace(/\n/g, '\r\n');
+  assert.notEqual(lf, crlf, 'предпосылка теста: тексты должны реально отличаться байтами');
+  assert.equal(configHash(lf), configHash(crlf));
+});
+
+test('.gitattributes закрепляет LF за .pipeline/config.yml', () => {
+  const attrs = readFileSync('.gitattributes', 'utf8');
+  assert.match(attrs, /^\.pipeline\/config\.yml\s+text\s+eol=lf$/m);
 });
