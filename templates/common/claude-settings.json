@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .claude/hooks/pipeline-status.sh",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
+}

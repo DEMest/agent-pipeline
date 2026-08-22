@@ -1,0 +1,9 @@
+{
+  "checks": {
+    "test": "npm run test",
+    "lint": "npm run lint",
+    "typecheck": "npx tsc --noEmit",
+    "build": "npm run build"
+  },
+  "required": ["test"]
+}

@@ -1,0 +1,16 @@
+# Этот файл ведёт агент. Правки руками допустимы, но основной путь —
+# сказать агенту: /pipeline:reconfigure
+#
+# После изменения этого файла артефакты нужно перегенерировать,
+# иначе джоба drift-check в CI станет красной.
+version: 1
+project:
+  name: {{NAME}}
+  stack: {{STACK}}
+  goal: "{{GOAL}}"
+autonomy: {{AUTONOMY}}
+stage: {{STAGE}}
+checks:
+  test: npm run test
+  build: npm run build
+required: [test]
