@@ -54,3 +54,30 @@ test('скилл завершается зелёным CI, а не запись�
 test('команда ссылается на скилл', () => {
   assert.match(readText('commands/init.md'), /pipeline-init/);
 });
+
+const DOCTOR = () => readText('skills/pipeline-ci-doctor/SKILL.md');
+
+test('у скилла ci-doctor есть frontmatter с именем и описанием', () => {
+  const text = DOCTOR();
+  assert.match(text, /^---\n/);
+  assert.match(text, /^name: pipeline-ci-doctor$/m);
+  assert.match(text, /^description: .+$/m);
+});
+
+test('ci-doctor получает диагноз командой diagnose, а не читает сырой лог глазами', () => {
+  assert.match(DOCTOR(), /cli\.mjs diagnose/);
+});
+
+test('ci-doctor ограничивает число попыток тремя', () => {
+  const text = DOCTOR();
+  assert.match(text, /три попытки|3 попытки/i);
+  assert.match(text, /gh pr comment/, 'счётчик попыток должен фиксироваться комментарием к PR');
+});
+
+test('ci-doctor различает поломку кода и поломку самого пайплайна', () => {
+  assert.match(DOCTOR(), /drift-check/);
+});
+
+test('команда fix-ci ссылается на скилл ci-doctor', () => {
+  assert.match(readText('commands/fix-ci.md'), /pipeline-ci-doctor/);
+});
