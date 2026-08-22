@@ -10,6 +10,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
-COPY --from=build /app ./
+# Эта строка адаптируется под конкретный проект скиллом pipeline-init: если в проекте нет шага
+# сборки и он запускается прямо из исходников, сюда будут скопированы исходники, а не /app/dist.
+COPY --from=build /app/dist ./dist
 EXPOSE 3000
 CMD ["npm", "start"]

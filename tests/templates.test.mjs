@@ -44,10 +44,38 @@ test('настройки шаблона объявляют SessionStart-хук',
   assert.match(JSON.stringify(entries), /pipeline-status\.sh/);
 });
 
-test('SessionStart-хук только печатает: ни сети, ни записи, ни установки', () => {
+// Хук приезжает вместе со скачанным шаблоном и Claude Code исполняет его сам, на SessionStart,
+// раньше, чем человек успевает его прочитать. Поэтому нельзя проверять "нет ли в тексте плохих
+// слов" — чёрный список (curl, wget, npm install, ...) обходится тривиально командами вроде
+// nc, tee, dd, scp, node -e, python3 -c, sed -i или косвенным вызовом через переменную
+// (c=curl; $c ...). Единственная надёжная проверка — белый список: у хука есть ровно пять
+// разрешённых форм строк, и любая строка, не подходящая ни под одну из них, обязана валить тест.
+test('SessionStart-хук построен на белом списке разрешённых конструкций', () => {
   const hook = readFileSync('templates/common/hooks/pipeline-status.sh', 'utf8');
-  for (const forbidden of ['curl', 'wget', 'npm install', 'pip install', 'git ', '>', 'rm ']) {
-    assert.equal(hook.includes(forbidden), false, `хук не должен содержать ${JSON.stringify(forbidden)}`);
-  }
+  const lines = hook.split('\n');
+
+  const isShebang = (line) => /^#!/.test(line);
+  const isComment = (line) => /^\s*#/.test(line);
+  // echo только с буквальным текстом в двойных кавычках: без `"`, `$` и обратных кавычек
+  // внутри — это исключает подстановку команд и переменных внутри самой строки echo.
+  const isEcho = (line) => /^\s*echo\s+"[^"$`]*"\s*$/.test(line);
+  const isIf = (line) => /^\s*if\s*$/.test(line);
+  const isElse = (line) => /^\s*else\s*$/.test(line);
+  const isFi = (line) => /^\s*fi\s*$/.test(line);
+  // Проверка существования файла вида `[ -f <путь> ]; then`, единственная форма условия if.
+  const isFileExistsCheck = (line) => /^\s*if\s+\[\s+-f\s+\S+\s+\]\s*;\s*then\s*$/.test(line);
+
+  lines.forEach((line, index) => {
+    if (line.trim() === '') return;
+    const lineNumber = index + 1;
+    const allowed = lineNumber === 1
+      ? isShebang(line)
+      : isComment(line) || isEcho(line) || isFileExistsCheck(line) || isIf(line) || isElse(line) || isFi(line);
+    assert.ok(
+      allowed,
+      `строка ${lineNumber} не входит в белый список разрешённых конструкций хука: ${JSON.stringify(line)}`,
+    );
+  });
+
   assert.match(hook, /echo/);
 });
