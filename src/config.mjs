@@ -9,7 +9,13 @@ const STAGES = ['sketch', 'shaping', 'product', 'sustained'];
 // Два имени зарезервированы: 'all' совпадает с агрегатной веткой диспетчера,
 // 'esac' закрывает конструкцию case и ломает разбор всего скрипта.
 const CHECK_NAME = /^[a-z][a-z0-9_]*$/;
-const RESERVED_CHECK_NAMES = ['all', 'esac'];
+// Причина запрета у каждого имени своя, поэтому она хранится рядом с ним:
+// разработчик, увидевший ошибку, должен понять, почему имя нельзя взять.
+// Остальные ключевые слова sh в позиции шаблона case безопасны — проверено запуском.
+const RESERVED_CHECK_NAMES = {
+  all: 'оно совпадает с агрегатной веткой диспетчера, запускающей все проверки сразу',
+  esac: 'оно закрывает конструкцию case и ломает разбор всего скрипта',
+};
 
 export class ConfigError extends Error {
   constructor(message, field) {
@@ -58,8 +64,8 @@ export function parseConfig(rawText) {
     if (!CHECK_NAME.test(name)) {
       throw new ConfigError(`checks: имя ${JSON.stringify(name)} не подходит для имени функции sh, ожидается ${CHECK_NAME}`, 'checks');
     }
-    if (RESERVED_CHECK_NAMES.includes(name)) {
-      throw new ConfigError(`checks: имя ${JSON.stringify(name)} зарезервировано диспетчером для запуска всех проверок сразу`, 'checks');
+    if (Object.hasOwn(RESERVED_CHECK_NAMES, name)) {
+      throw new ConfigError(`checks: имя ${JSON.stringify(name)} нельзя использовать — ${RESERVED_CHECK_NAMES[name]}`, 'checks');
     }
     if (typeof command !== 'string' || command.trim() === '') {
       throw new ConfigError(`checks.${name}: команда должна быть непустой строкой`, 'checks');

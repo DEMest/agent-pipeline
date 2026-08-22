@@ -60,6 +60,23 @@ test('отвергает проверку с зарезервированным 
   assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'checks');
 });
 
+test('объясняет причину запрета отдельно для каждого зарезервированного имени', () => {
+  const reasonFor = (name) => {
+    const bad = VALID.replace('  lint: npm run lint', `  ${name}: npm run x`);
+    try {
+      parseConfig(bad);
+      throw new Error(`имя ${name} должно было быть отвергнуто`);
+    } catch (e) {
+      return e.message;
+    }
+  };
+  const allReason = reasonFor('all');
+  const esacReason = reasonFor('esac');
+  assert.notEqual(allReason, esacReason);
+  assert.match(allReason, /диспетчер/);
+  assert.match(esacReason, /case/);
+});
+
 test('отвергает пустой набор проверок', () => {
   const bad = `
 version: 1
