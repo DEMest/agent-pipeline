@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig, configHash } from './config.mjs';
 import { generatePipelineSh } from './generate-sh.mjs';
 import { generateCi } from './generate-ci.mjs';
+import { parseFailedLog, describeFailures } from './ci-log.mjs';
 
 const MARKER = '# generated-from-config: sha256:';
 
@@ -56,19 +57,39 @@ export function checkDrift(projectDir) {
   return { ok: stale.length === 0, stale };
 }
 
-const USAGE = 'использование: node src/cli.mjs <generate|check> <каталог проекта>';
+export function diagnose(projectDir, logPath) {
+  let logText;
+  try {
+    logText = readFileSync(logPath, 'utf8');
+  } catch (cause) {
+    throw new Error(`не удалось прочитать лог ${logPath}: ${cause.message}`);
+  }
+
+  // Конфиг нужен только чтобы связать шаг с командой проверки. Если он сломан или
+  // отсутствует, диагноз всё равно полезен — тем более что уронить CI мог именно он.
+  let config = null;
+  try {
+    config = loadConfig(join(projectDir, '.pipeline', 'config.yml'));
+  } catch {
+    config = null;
+  }
+
+  return describeFailures(parseFailedLog(logText), config);
+}
+
+const USAGE = 'использование: node src/cli.mjs <generate|check|diagnose> <каталог проекта> [<путь лога>]';
 
 // Явный разбор аргументов вместо неявного "если оба на месте": раньше
 // `node src/cli.mjs check` без каталога проваливал условие `command && projectDir`
 // целиком, ничего не печатал и завершался кодом 0 — вызывающий получал «всё хорошо»
 // вместо ошибки о нехватке аргумента.
-function runCli(command, projectDir) {
+function runCli(command, projectDir, logPath) {
   if (!command) {
     console.error(USAGE);
     return 2;
   }
-  if (command !== 'generate' && command !== 'check') {
-    console.error(`неизвестная команда: ${command} (доступны: generate, check)`);
+  if (command !== 'generate' && command !== 'check' && command !== 'diagnose') {
+    console.error(`неизвестная команда: ${command} (доступны: generate, check, diagnose)`);
     return 2;
   }
   if (!projectDir) {
@@ -82,13 +103,24 @@ function runCli(command, projectDir) {
       for (const path of written) console.log(`записано: ${path}`);
       return 0;
     }
-    const { ok, stale } = checkDrift(projectDir);
-    if (!ok) {
-      for (const path of stale) console.error(`устарело: ${path}`);
-      return 1;
+    if (command === 'check') {
+      const { ok, stale } = checkDrift(projectDir);
+      if (!ok) {
+        for (const path of stale) console.error(`устарело: ${path}`);
+        return 1;
+      }
+      console.log('артефакты соответствуют конфигу');
+      return 0;
     }
-    console.log('артефакты соответствуют конфигу');
-    return 0;
+    if (command === 'diagnose') {
+      if (!logPath) {
+        console.error(USAGE);
+        return 2;
+      }
+      const text = diagnose(projectDir, logPath);
+      console.log(text);
+      return 0;
+    }
   } catch (e) {
     // Сообщение об ошибке (ConfigError о неверном конфиге, UnsupportedStackError
     // о нереализованном стеке), а не сырой стектрейс Node — README обещает
@@ -100,6 +132,6 @@ function runCli(command, projectDir) {
 
 const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMainModule) {
-  const [, , command, projectDir] = process.argv;
-  process.exitCode = runCli(command, projectDir);
+  const [, , command, projectDir, logPath] = process.argv;
+  process.exitCode = runCli(command, projectDir, logPath);
 }

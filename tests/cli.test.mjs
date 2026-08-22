@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { generateInto, checkDrift } from '../src/cli.mjs';
+import { generateInto, checkDrift, diagnose } from '../src/cli.mjs';
 
 const CLI_PATH = join('src', 'cli.mjs');
 
@@ -154,4 +154,41 @@ test('CLI с неизвестной командой достижимо сооб
   const result = runCli(['frobnicate', '.']);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /неизвестная команда/);
+});
+
+test('диагноз связывает шаг с командой из конфига проекта', () => {
+  const dir = makeProject();
+  try {
+    const logPath = join(dir, 'failed.log');
+    writeFileSync(logPath, [
+      'checks\ttest\t2026-08-22T11:40:14.2012345Z ℹ fail 1',
+      'checks\ttest\t2026-08-22T11:40:14.9998765Z ##[error]Process completed with exit code 1.',
+    ].join('\n'), 'utf8');
+    const text = diagnose(dir, logPath);
+    assert.match(text, /checks/);
+    assert.match(text, /npm run test -- --run/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('диагноз выдаётся и без конфига проекта', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pipeline-nocfg-'));
+  try {
+    const logPath = join(dir, 'failed.log');
+    writeFileSync(logPath, 'checks\ttest\t2026-08-22T11:40:14.9998765Z ##[error]Process completed with exit code 1.\n', 'utf8');
+    const text = diagnose(dir, logPath);
+    assert.match(text, /checks/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('диагноз по несуществующему файлу лога сообщает об этом внятно', () => {
+  const dir = makeProject();
+  try {
+    assert.throws(() => diagnose(dir, join(dir, 'нет-такого.log')), /лог/i);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
