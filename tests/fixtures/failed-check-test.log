@@ -1,0 +1,11 @@
+checks	test	2026-08-22T11:40:12.1234567Z ##[group]Run sh scripts/pipeline.sh test
+checks	test	2026-08-22T11:40:12.1234890Z [36;1msh scripts/pipeline.sh test[0m
+checks	test	2026-08-22T11:40:12.1235102Z shell: /usr/bin/bash -e {0}
+checks	test	2026-08-22T11:40:12.1235400Z ##[endgroup]
+checks	test	2026-08-22T11:40:13.5551234Z > agent-pipeline@0.1.0 test
+checks	test	2026-08-22T11:40:13.5559876Z > node --test tests/*.test.mjs
+checks	test	2026-08-22T11:40:14.2001234Z ✖ хеш стабилен и имеет длину 64 (1.2003ms)
+checks	test	2026-08-22T11:40:14.2005678Z   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+checks	test	2026-08-22T11:40:14.2009012Z   + actual - expected
+checks	test	2026-08-22T11:40:14.2012345Z ℹ fail 1
+checks	test	2026-08-22T11:40:14.9998765Z ##[error]Process completed with exit code 1.

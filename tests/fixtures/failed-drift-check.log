@@ -1,0 +1,16 @@
+drift-check	Сверить артефакты с конфигом	﻿2026-08-22T10:23:00.2997541Z ##[group]Run expected=$(sha256sum .pipeline/config.yml | cut -d " " -f 1)
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.2998797Z ^[[36;1mexpected=$(sha256sum .pipeline/config.yml | cut -d " " -f 1)^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.2999638Z ^[[36;1mstatus=0^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3000314Z ^[[36;1mfor f in .github/workflows/ci.yml scripts/pipeline.sh; do^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3001895Z ^[[36;1m  actual=$(sed -n "s/^# generated-from-config: sha256://p" "$f" | head -n 1)^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3002833Z ^[[36;1m  if [ "$actual" != "$expected" ]; then^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3003761Z ^[[36;1m    echo "::error file=$f::артефакт не соответствует .pipeline/config.yml, перегенерируйте пайплайн"^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3004892Z ^[[36;1m    status=1^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3005417Z ^[[36;1m  fi^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3005887Z ^[[36;1mdone^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3006366Z ^[[36;1mexit $status^[[0m
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3050180Z shell: /usr/bin/bash -e {0}
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3051316Z ##[endgroup]
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3240170Z ##[error]артефакт не соответствует .pipeline/config.yml, перегенерируйте пайплайн
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3255806Z ##[error]артефакт не соответствует .pipeline/config.yml, перегенерируйте пайплайн
+drift-check	Сверить артефакты с конфигом	2026-08-22T10:23:00.3262982Z ##[error]Process completed with exit code 1.
