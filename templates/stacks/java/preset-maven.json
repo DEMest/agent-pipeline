@@ -1,0 +1,8 @@
+{
+  "checks": {
+    "test": "./mvnw -B test",
+    "build": "./mvnw -B package -DskipTests",
+    "verify": "./mvnw -B verify"
+  },
+  "required": ["test"]
+}

@@ -1,0 +1,8 @@
+{
+  "checks": {
+    "test": "./gradlew test",
+    "build": "./gradlew assemble",
+    "check": "./gradlew check"
+  },
+  "required": ["test"]
+}

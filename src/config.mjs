@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml';
 const STACKS = ['node-ts', 'python', 'go', 'java'];
 const AUTONOMY = ['full', 'merge-gate', 'prod-gate'];
 const STAGES = ['sketch', 'shaping', 'product', 'sustained'];
+const JAVA_BUILDS = ['maven', 'gradle'];
 // Имена проверок становятся именами функций в sh и ключами диспетчера case.
 // Два имени зарезервированы: 'all' совпадает с агрегатной веткой диспетчера,
 // 'esac' закрывает конструкцию case и ломает разбор всего скрипта.
@@ -71,6 +72,23 @@ export function parseConfig(rawText) {
     throw new ConfigError('project.name: непустая строка обязательна', 'project.name');
   }
   requireOneOf(project.stack, STACKS, 'project.stack');
+  // У java две несовместимые системы сборки с разными командами, разным кэшем в CI
+  // и разным местом сборочного артефакта. Угадывать её по содержимому checks — гадание
+  // на строках, поэтому она указывается явно.
+  if (project.stack === 'java') {
+    requireOneOf(project.build, JAVA_BUILDS, 'project.build');
+    // Версия JDK влияет и на CI, и на образ. Spring Boot 3 требует 17 и новее,
+    // поэтому по умолчанию берётся 21 LTS, но проект может назвать свою.
+    if (project.java_version !== undefined
+        && !(typeof project.java_version === 'string' && /^[0-9]+$/.test(project.java_version))) {
+      throw new ConfigError('project.java_version: ожидается строка с номером версии, например "21"', 'project.java_version');
+    }
+  } else if (project.build !== undefined) {
+    throw new ConfigError(
+      `project.build: поле имеет смысл только для стека java, а стек здесь ${JSON.stringify(project.stack)}`,
+      'project.build',
+    );
+  }
   requireOneOf(doc.autonomy, AUTONOMY, 'autonomy');
   requireOneOf(doc.stage, STAGES, 'stage');
 

@@ -46,6 +46,22 @@ The generated pipeline does not depend on the plugin. Clone the repository witho
 installed and it still builds, tests and deploys — the agent is an accelerator, not a runtime
 dependency.
 
+## Stacks
+
+**node-ts** — checks taken from `package.json`, Node set up with npm cache.
+
+**java** — Maven or Gradle, detected from the project and written into `project.build`. The build
+tool decides three things that cannot be guessed later: the commands, the CI cache, and where the
+build artifact ends up, so it is recorded explicitly. Commands go through the project's own wrapper
+(`./mvnw`, `./gradlew`) rather than a system-wide install, and CI restores the executable bit on it —
+that flag is routinely lost when the wrapper is committed from Windows. JDK version comes from the
+project (`java.version`, `maven.compiler.release`, or the Gradle toolchain block) and falls back
+to 21.
+
+Verified against a real Spring Boot 4.1.1 project on Java 21 with Maven: generation, `pipeline.sh
+test`, `pipeline.sh build` and the drift check all pass, and the jar lands exactly where the
+Dockerfile's `COPY` expects it. The container image build itself has not been exercised yet.
+
 ## Commands
 
 | Command | What it does |
@@ -89,8 +105,8 @@ pin a known host key in a secret instead.
 
 Stated plainly, because a template that oversells itself wastes your time:
 
-- only the **node-ts** stack is generated. `python`, `go` and `java` are valid in the config but
-  generation refuses with an explicit error rather than producing something broken;
+- **python** and **go** are valid in the config but generation refuses with an explicit error
+  rather than producing something broken;
 - no maturity stages yet — checks do not tighten on their own as a project grows;
 - no database backup before migrations, though the design calls for one.
 

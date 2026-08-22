@@ -65,3 +65,55 @@ test('нереализованный стек отвергается явной 
   const cfg = { ...CFG, project: { ...CFG.project, stack: 'go' } };
   assert.throws(() => generateCi(cfg, HASH), (e) => e instanceof UnsupportedStackError && e.stackName === 'go');
 });
+
+const javaConfig = (build, extra = {}) => ({
+  ...CFG,
+  project: { name: 'my-app', stack: 'java', build, goal: 'g', ...extra },
+  checks: { test: build === 'gradle' ? './gradlew test' : './mvnw -B test' },
+  required: ['test'],
+});
+
+for (const build of ['maven', 'gradle']) {
+  test(`для java/${build} ставится JDK`, () => {
+    const doc = parseYaml(generateCi(javaConfig(build), HASH));
+    const setup = doc.jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-java@'));
+    assert.ok(setup, 'нет шага установки JDK');
+    assert.equal(setup.with.distribution, 'temurin');
+  });
+
+  test(`для java/${build} кэшируется своя система сборки`, () => {
+    // Подсказка не той системе не кэширует ничего: maven и gradle держат
+    // зависимости в разных каталогах.
+    const doc = parseYaml(generateCi(javaConfig(build), HASH));
+    const setup = doc.jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-java@'));
+    assert.equal(setup.with.cache, build);
+  });
+
+  test(`для java/${build} обёртке сборки возвращается право на запуск`, () => {
+    // Флаг исполняемости теряется, если файл добавили с Windows или через веб-интерфейс,
+    // и CI падает на первом же шаге с Permission denied.
+    const doc = parseYaml(generateCi(javaConfig(build), HASH));
+    const wrapper = build === 'gradle' ? 'gradlew' : 'mvnw';
+    const step = doc.jobs.checks.steps.find((s) => s.name?.includes(wrapper));
+    assert.ok(step, `нет шага chmod для ./${wrapper}`);
+    assert.ok(step.run.includes(`chmod +x ./${wrapper}`), `шаг не возвращает право на запуск: ${step.run}`);
+  });
+}
+
+test('версия JDK по умолчанию 21 — Spring Boot 3 требует 17 и новее', () => {
+  const doc = parseYaml(generateCi(javaConfig('maven'), HASH));
+  const setup = doc.jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-java@'));
+  assert.equal(setup.with['java-version'], '21');
+});
+
+test('проект может назвать свою версию JDK', () => {
+  const doc = parseYaml(generateCi(javaConfig('maven', { java_version: '17' }), HASH));
+  const setup = doc.jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-java@'));
+  assert.equal(setup.with['java-version'], '17');
+});
+
+test('java не тянет за собой установку Node', () => {
+  const doc = parseYaml(generateCi(javaConfig('maven'), HASH));
+  assert.equal(doc.jobs.checks.steps.some((s) => s.uses?.startsWith('actions/setup-node@')), false);
+  assert.equal(doc.jobs.checks.steps.some((s) => s.run === 'npm ci'), false);
+});

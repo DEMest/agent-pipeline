@@ -212,3 +212,18 @@ test('init кладёт compose в проект, когда в конфиге е
   assert.match(text, /SSH_KEY/);
   assert.match(text, /Environment/);
 });
+
+test('init определяет систему сборки java по файлам, а не угадывает', () => {
+  // От build зависят команды, кэш в CI и место артефакта — угадать её позже нельзя.
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /project\.build/);
+  assert.match(text, /build\.gradle/);
+  assert.match(text, /preset-maven\.json/);
+  assert.match(text, /preset-gradle\.json/);
+});
+
+test('init берёт версию JDK из проекта, а не из головы', () => {
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /project\.java_version/);
+  assert.match(text, /java\.version|maven\.compiler\.release/);
+});

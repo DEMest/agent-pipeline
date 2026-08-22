@@ -82,9 +82,39 @@ test('SessionStart-хук построен на белом списке разр
   assert.match(hook, /echo/);
 });
 
-test('шаблон compose берёт тег образа из переменной, а не прибивает его гвоздями', () => {
-  // Один и тот же файл обслуживает выкатку и откат: подставляется другой IMAGE.
-  const compose = readText('templates/deploy/docker-vps/compose.yml');
-  assert.match(compose, /image: \$\{IMAGE\}/);
-  assert.equal(/image: .*:latest/.test(compose), false);
-});
+
+for (const stack of ['node-ts', 'java']) {
+  test(`шаблон compose стека ${stack} берёт тег образа из переменной`, () => {
+    // Один и тот же файл обслуживает выкатку и откат: подставляется другой IMAGE.
+    // Прибитый тег сделал бы откат невозможным.
+    const compose = readText(`templates/stacks/${stack}/compose.yml`);
+    assert.match(compose, /image: \$\{IMAGE\}/);
+    assert.equal(/image: .*:latest/.test(compose), false);
+  });
+}
+
+for (const build of ['maven', 'gradle']) {
+  test(`пресет java/${build} ссылается только на существующие проверки`, () => {
+    const preset = JSON.parse(readText(`templates/stacks/java/preset-${build}.json`));
+    assert.ok(Object.hasOwn(preset.checks, 'test'));
+    for (const name of preset.required) {
+      assert.ok(Object.hasOwn(preset.checks, name), `required ссылается на ${name}, которого нет в checks`);
+    }
+  });
+
+  test(`пресет java/${build} вызывает обёртку своей системы сборки`, () => {
+    const preset = JSON.parse(readText(`templates/stacks/java/preset-${build}.json`));
+    const wrapper = build === 'gradle' ? './gradlew' : './mvnw';
+    const other = build === 'gradle' ? './mvnw' : './gradlew';
+    const commands = Object.values(preset.checks).join(' ');
+    assert.ok(commands.includes(wrapper), `команды должны идти через ${wrapper}`);
+    assert.equal(commands.includes(other), false, `в пресете ${build} не должно быть ${other}`);
+  });
+
+  test(`Dockerfile java/${build} берёт артефакт из каталога своей системы сборки`, () => {
+    const dockerfile = readText(`templates/stacks/java/Dockerfile.${build}`);
+    const expected = build === 'gradle' ? /build\/libs\/\*\.jar/ : /target\/\*\.jar/;
+    assert.match(dockerfile, expected);
+    assert.match(dockerfile, /eclipse-temurin:\d+-jre/, 'финальный образ должен быть на JRE, а не на JDK');
+  });
+}
