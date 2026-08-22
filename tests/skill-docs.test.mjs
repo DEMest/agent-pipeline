@@ -15,7 +15,7 @@ test('скилл требует три проверки окружения из 
   const text = SKILL();
   assert.match(text, /gh auth status/);
   assert.match(text, /author\.login/);
-  assert.match(text, /actions/i);
+  assert.match(text, /gh api repos\/<owner>\/<repo>\/actions\/permissions --jq '\.enabled'/);
 });
 
 test('скилл требует снимать команды с проекта, а не выдумывать', () => {
