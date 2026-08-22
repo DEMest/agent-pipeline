@@ -38,7 +38,7 @@ test('выбрасывает временные метки из содержим
 test('выбрасывает ANSI-последовательности', () => {
   const [failure] = parseFailedLog(CHECKS());
   const joined = [...failure.errors, ...failure.excerpt].join('\n');
-  assert.equal(joined.includes(''), false);
+  assert.equal(joined.includes('\u001b'), false);
 });
 
 test('не тащит в выдержку эхо команды из группы', () => {
