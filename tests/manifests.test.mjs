@@ -57,7 +57,7 @@ test('README честно перечисляет, что пока не подд�
   assert.match(readme, /Пока не поддерживается/);
   // Названия нереализованных частей: если какую-то из них построят, строку нужно убрать
   // осознанно, а не оставить README обещающим то, чего нет, или отрицающим то, что есть.
-  for (const missing of ['python', 'деплой', 'ship']) {
+  for (const missing of ['python', 'деплой']) {
     assert.match(readme, new RegExp(missing, 'i'), `README должен упоминать ${missing} среди границ`);
   }
 });
