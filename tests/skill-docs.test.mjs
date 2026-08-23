@@ -227,3 +227,22 @@ test('init берёт версию JDK из проекта, а не из гол�
   assert.match(text, /project\.java_version/);
   assert.match(text, /java\.version|maven\.compiler\.release/);
 });
+
+test('init создаёт файл блокировки для нового проекта — без него npm ci в CI падает', () => {
+  // Проверено фактически: npm ci в пустом проекте без package-lock.json завершается ошибкой,
+  // то есть новый проект получил бы красный CI на первом же прогоне.
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /npm install/);
+  assert.match(text, /package-lock\.json/);
+  assert.match(text, /npm ci/);
+});
+
+test('init спрашивает стек, когда папка пуста, а не угадывает его', () => {
+  const text = readText('skills/pipeline-init/SKILL.md');
+  const emptySection = text.indexOf('Если в папке пусто');
+  assert.notEqual(emptySection, -1, 'в скилле должен быть раздел про пустую папку');
+  const nextHeading = text.indexOf('\n## ', emptySection);
+  const section = nextHeading === -1 ? text.slice(emptySection) : text.slice(emptySection, nextHeading);
+  assert.match(section, /git init/);
+  assert.match(section, /sketch/);
+});

@@ -13,6 +13,21 @@ The agent does the setup, not you. In your project directory:
 
     /pipeline:init
 
+### Starting from nothing
+
+You do not need any code first. Make an empty folder, open Claude Code in it, run `/pipeline:init`,
+and answer the questions — the agent asks which stack you want (there is nothing to detect yet),
+creates a minimal skeleton with one smoke test, installs dependencies so the lockfile exists, and
+takes the first pull request to a green build.
+
+The point of doing this before writing a feature is that the pipeline proves itself while the
+project is still empty. A red pipeline that you plan to fix "once there is real code" never gets
+fixed.
+
+A new project starts at `stage: sketch`, where tests are not yet required and pushing straight to
+`main` is allowed — the loop should not slow you down while you are still looking for the shape of
+the idea.
+
 It detects the stack, reads the real check commands out of your project instead of guessing them,
 asks only what it cannot find out on its own, generates the CI workflow, opens a pull request and
 takes it to a green build.
