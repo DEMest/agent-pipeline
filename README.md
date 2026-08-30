@@ -90,6 +90,22 @@ deliberately broken test to confirm the gate turns red — but not with pytest o
 install, because this machine had neither pytest nor network access for pip. Go is covered by the
 generator's tests only: no Go toolchain was available to run a real project through.
 
+## Other AI tools
+
+Claude Code gets slash commands from the plugin. Everything else — the generator, the config, the
+generated workflows and `scripts/pipeline.sh` — is plain Node and plain files, so any agent can
+drive it, and CI runs it with no agent at all.
+
+For Codex, Cursor, Jules, Aider and anything else following the `AGENTS.md` convention, the same
+three procedures live in [AGENTS.md](AGENTS.md) at the repository root. Invoke the tool without
+Claude-specific variables:
+
+    npx --yes github:DEMest/agent-pipeline generate .
+
+Differences outside Claude Code: no slash commands (you ask in plain words instead), and no
+start-of-session hint that the pipeline is unconfigured — that one comes from a Claude Code hook.
+The loop itself is identical.
+
 ## Commands
 
 | Command | What it does |

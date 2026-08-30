@@ -262,3 +262,41 @@ test('init знает, что у go нет поля build', () => {
   assert.match(goSection, /project\.build/);
   assert.match(goSection, /go\.mod/);
 });
+
+const AGENTS = () => readText('AGENTS.md');
+
+test('AGENTS.md даёт способ вызова инструмента без Claude Code', () => {
+  // Без этого агент вне Claude не найдёт генератор: переменной CLAUDE_PLUGIN_ROOT
+  // у него нет, а путь до клона репозитория ниоткуда не следует.
+  const text = AGENTS();
+  assert.match(text, /npx --yes github:DEMest\/agent-pipeline/);
+  assert.match(text, /node \/путь\/к\/клону/);
+});
+
+test('AGENTS.md описывает все три процедуры', () => {
+  const text = AGENTS();
+  for (const procedure of ['Развернуть пайплайн', 'Провести задачу', 'Починить красный CI']) {
+    assert.ok(text.includes(procedure), `в AGENTS.md нет процедуры «${procedure}»`);
+  }
+});
+
+test('AGENTS.md называет те же команды инструмента, что понимает CLI', () => {
+  // Страж рассинхрона: команду добавили в CLI и забыли в инструкции для агентов
+  // (или наоборот, описали несуществующую) — тест краснеет здесь.
+  const cli = readText('src/cli.mjs');
+  const usage = cli.match(/<(generate\|[a-z|]+)>/);
+  assert.ok(usage, 'в cli.mjs не найдена строка использования с перечнем команд');
+  const commands = usage[1].split('|');
+  const agents = AGENTS();
+  for (const command of commands) {
+    assert.ok(agents.includes(`$PIPELINE ${command}`), `AGENTS.md не описывает команду ${command}`);
+  }
+});
+
+test('лимит попыток в AGENTS.md совпадает со скиллом починки CI', () => {
+  // Две инструкции об одном и том же процессе не должны расходиться в числах.
+  const agents = AGENTS();
+  const skill = readText('skills/pipeline-ci-doctor/SKILL.md');
+  assert.match(agents, /Лимит — три на один pull request/);
+  assert.match(skill, /три попытки|Лимит — три/i);
+});

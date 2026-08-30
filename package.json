@@ -3,11 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Генератор пайплайна и плагин Claude Code",
+  "description": "Генератор пайплайна CI/CD: конфиг проекта превращается в workflow, локальный скрипт проверок и выкатку",
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "yaml": "^2.6.0"
+  },
+  "bin": {
+    "agent-pipeline": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "templates",
+    "skills",
+    "commands",
+    "AGENTS.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DEMest/agent-pipeline.git"
   }
 }
