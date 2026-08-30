@@ -204,3 +204,66 @@ test('отвергает пустой список окружений', () => {
   const bad = WITH_DEPLOY.replace(/  environments:\n(    .*\n)+/, '  environments: {}\n');
   assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'deploy.environments');
 });
+
+const PY = `
+version: 1
+project:
+  name: my-app
+  stack: python
+  build: pip
+  goal: "пример"
+autonomy: prod-gate
+stage: shaping
+checks:
+  test: python -m pytest
+required: [test]
+`;
+
+const GO = PY.replace('  stack: python\n  build: pip\n', '  stack: go\n').replace('python -m pytest', 'go test ./...');
+
+test('python требует явного указания менеджера зависимостей', () => {
+  const bad = PY.replace('  build: pip\n', '');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'project.build');
+});
+
+test('python принимает pip, poetry и uv', () => {
+  for (const build of ['pip', 'poetry', 'uv']) {
+    const cfg = parseConfig(PY.replace('build: pip', `build: ${build}`));
+    assert.equal(cfg.project.build, build);
+  }
+});
+
+test('python отвергает неизвестный менеджер зависимостей', () => {
+  assert.throws(
+    () => parseConfig(PY.replace('build: pip', 'build: conda')),
+    (e) => e instanceof ConfigError && e.field === 'project.build',
+  );
+});
+
+test('у go нет выбора системы сборки — поле build лишнее', () => {
+  // Модули и кэш встроены в сам инструмент, выбирать нечего.
+  const bad = GO.replace('  goal:', '  build: pip\n  goal:');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'project.build');
+});
+
+test('версия python указывается как minor, без патча', () => {
+  assert.equal(parseConfig(PY.replace('  goal:', '  python_version: "3.12"\n  goal:')).project.python_version, '3.12');
+  assert.throws(
+    () => parseConfig(PY.replace('  goal:', '  python_version: "3.12.1"\n  goal:')),
+    (e) => e instanceof ConfigError && e.field === 'project.python_version',
+  );
+});
+
+test('go принимает и псевдоверсии, и точные', () => {
+  for (const version of ['stable', 'oldstable', '1.23', '1.23.4']) {
+    const cfg = parseConfig(GO.replace('  goal:', `  go_version: "${version}"\n  goal:`));
+    assert.equal(cfg.project.go_version, version);
+  }
+});
+
+test('поле версии чужого стека отвергается', () => {
+  // java_version в python-проекте — почти наверняка copy-paste из чужого конфига,
+  // и молча проигнорировать его значит дать человеку ложную уверенность.
+  const bad = PY.replace('  goal:', '  java_version: "21"\n  goal:');
+  assert.throws(() => parseConfig(bad), (e) => e instanceof ConfigError && e.field === 'project.java_version');
+});

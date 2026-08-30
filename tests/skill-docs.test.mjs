@@ -246,3 +246,19 @@ test('init спрашивает стек, когда папка пуста, а �
   assert.match(section, /git init/);
   assert.match(section, /sketch/);
 });
+
+test('init определяет менеджер зависимостей python по файлам', () => {
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /poetry\.lock/);
+  assert.match(text, /uv\.lock/);
+  assert.match(text, /preset-pip\.json/);
+});
+
+test('init знает, что у go нет поля build', () => {
+  // Валидатор отвергает build у go, и скилл должен объяснять почему,
+  // иначе агент будет пытаться его заполнить и получать ошибку.
+  const text = readText('skills/pipeline-init/SKILL.md');
+  const goSection = text.slice(text.indexOf('### Если стек go'));
+  assert.match(goSection, /project\.build/);
+  assert.match(goSection, /go\.mod/);
+});

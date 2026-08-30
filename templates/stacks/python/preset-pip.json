@@ -1,0 +1,8 @@
+{
+  "checks": {
+    "test": "python -m pytest",
+    "lint": "python -m ruff check .",
+    "typecheck": "python -m mypy ."
+  },
+  "required": ["test"]
+}

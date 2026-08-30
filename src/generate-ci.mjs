@@ -10,6 +10,27 @@ export class UnsupportedStackError extends Error {
 }
 
 const DEFAULT_JAVA_VERSION = '21';
+const DEFAULT_PYTHON_VERSION = '3.12';
+// stable вместо точной версии: go выпускает патчи часто, и прибивать их
+// в шаблоне значит устаревать через месяц.
+const DEFAULT_GO_VERSION = 'stable';
+
+// Наличие файла проверяется, а результат установки — нет: отсутствие
+// requirements.txt это нормально, а вот упавшая установка обязана уронить шаг,
+// поэтому здесь if, а не "|| true", который проглотил бы настоящую ошибку.
+const PYTHON_INSTALL = {
+  pip: [
+    'python -m pip install --upgrade pip',
+    'if [ -f requirements.txt ]; then pip install -r requirements.txt; fi',
+    'if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi',
+    'if [ -f pyproject.toml ]; then pip install -e .; fi',
+  ].join('\n'),
+  poetry: 'poetry install --no-interaction',
+  uv: [
+    'python -m pip install uv',
+    'uv sync',
+  ].join('\n'),
+};
 
 // Обёртка сборки лежит в репозитории, но флаг исполняемости часто теряется —
 // файл добавляют с Windows или через веб-интерфейс, и в CI получается
@@ -40,6 +61,36 @@ function setupSteps(project) {
         },
       },
       wrapperChmod(project.build === 'gradle' ? 'gradlew' : 'mvnw'),
+    ];
+  }
+  if (project.stack === 'python') {
+    const steps = [];
+    // poetry ставится до setup-python: с cache: poetry действие ищет уже
+    // существующий poetry, чтобы понять, что и откуда кэшировать.
+    if (project.build === 'poetry') {
+      steps.push({ name: 'Установить poetry', run: 'pipx install poetry' });
+    }
+    const cache = { pip: 'pip', poetry: 'poetry' }[project.build];
+    steps.push({
+      uses: 'actions/setup-python@v5',
+      with: {
+        'python-version': project.python_version ?? DEFAULT_PYTHON_VERSION,
+        // uv кэширует зависимости сам, и setup-python про него не знает.
+        ...(cache ? { cache } : {}),
+      },
+    });
+    steps.push({ name: 'Поставить зависимости', run: PYTHON_INSTALL[project.build] });
+    return steps;
+  }
+  if (project.stack === 'go') {
+    return [
+      {
+        uses: 'actions/setup-go@v5',
+        // Кэш модулей и сборки включён по умолчанию, но пишем явно: без него
+        // каждый прогон заново тянет весь граф зависимостей.
+        with: { 'go-version': project.go_version ?? DEFAULT_GO_VERSION, cache: true },
+      },
+      { name: 'Скачать зависимости', run: 'go mod download' },
     ];
   }
   return null;

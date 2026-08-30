@@ -127,12 +127,15 @@ test('неподдерживаемый стек не оставляет ни о�
   }
 });
 
-test('CLI на неподдерживаемом стеке печатает сообщение об ошибке без стектрейса Node и код 1', () => {
-  const dir = makeProject(CONFIG_TEXT.replace('stack: node-ts', 'stack: python'));
+test('CLI на неверном конфиге печатает сообщение об ошибке без стектрейса Node и код 1', () => {
+  const dir = makeProject(CONFIG_TEXT.replace('stack: node-ts', 'stack: rust'));
   try {
     const result = runCli(['generate', dir]);
     assert.equal(result.status, 1);
-    assert.equal(result.stderr.trim(), 'стек python пока не поддерживается генератором CI');
+    // Именно сообщение целиком, а не подстрока: стектрейс Node тоже содержал бы
+    // текст ошибки, и проверка на вхождение прошла бы при худшем выводе.
+    assert.match(result.stderr.trim(), /^project.stack: ожидалось одно из /);
+    assert.equal(result.stderr.includes('at '), false, 'в выводе не должно быть стектрейса');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

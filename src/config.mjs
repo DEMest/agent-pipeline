@@ -5,7 +5,27 @@ import { parse as parseYaml } from 'yaml';
 const STACKS = ['node-ts', 'python', 'go', 'java'];
 const AUTONOMY = ['full', 'merge-gate', 'prod-gate'];
 const STAGES = ['sketch', 'shaping', 'product', 'sustained'];
-const JAVA_BUILDS = ['maven', 'gradle'];
+// Менеджер сборки решает три вещи, которые нельзя вывести позже: какие команды
+// запускать, что кэшировать в CI и где искать собранный артефакт. Поэтому он
+// указывается явно, а не угадывается по строкам в checks.
+const BUILDS_BY_STACK = {
+  java: ['maven', 'gradle'],
+  python: ['pip', 'poetry', 'uv'],
+};
+// go обходится без этого поля: модули и кэш у него встроены в сам инструмент.
+const VERSION_FIELD_BY_STACK = {
+  java: 'java_version',
+  python: 'python_version',
+  go: 'go_version',
+};
+const VERSION_PATTERN_BY_STACK = {
+  // java называет версии целыми числами: 17, 21.
+  java: /^[0-9]+$/,
+  // python — только minor: 3.12. Патч-версию в CI указывать смысла нет.
+  python: /^3\.[0-9]+$/,
+  // go принимает и псевдоверсии stable/oldstable, и точные 1.23 или 1.23.4.
+  go: /^(stable|oldstable|[0-9]+\.[0-9]+(\.[0-9]+)?)$/,
+};
 // Имена проверок становятся именами функций в sh и ключами диспетчера case.
 // Два имени зарезервированы: 'all' совпадает с агрегатной веткой диспетчера,
 // 'esac' закрывает конструкцию case и ломает разбор всего скрипта.
@@ -72,23 +92,38 @@ export function parseConfig(rawText) {
     throw new ConfigError('project.name: непустая строка обязательна', 'project.name');
   }
   requireOneOf(project.stack, STACKS, 'project.stack');
-  // У java две несовместимые системы сборки с разными командами, разным кэшем в CI
-  // и разным местом сборочного артефакта. Угадывать её по содержимому checks — гадание
-  // на строках, поэтому она указывается явно.
-  if (project.stack === 'java') {
-    requireOneOf(project.build, JAVA_BUILDS, 'project.build');
-    // Версия JDK влияет и на CI, и на образ. Spring Boot 3 требует 17 и новее,
-    // поэтому по умолчанию берётся 21 LTS, но проект может назвать свою.
-    if (project.java_version !== undefined
-        && !(typeof project.java_version === 'string' && /^[0-9]+$/.test(project.java_version))) {
-      throw new ConfigError('project.java_version: ожидается строка с номером версии, например "21"', 'project.java_version');
-    }
+
+  const allowedBuilds = BUILDS_BY_STACK[project.stack];
+  if (allowedBuilds) {
+    requireOneOf(project.build, allowedBuilds, 'project.build');
   } else if (project.build !== undefined) {
     throw new ConfigError(
-      `project.build: поле имеет смысл только для стека java, а стек здесь ${JSON.stringify(project.stack)}`,
+      `project.build: у стека ${JSON.stringify(project.stack)} нет выбора системы сборки, поле лишнее`,
       'project.build',
     );
   }
+
+  // Версия рантайма влияет и на CI, и на образ, поэтому проверяется формат:
+  // опечатка вроде "3.12.1" для python или "1.23" для java иначе всплыла бы
+  // только в CI, отдельной от конфига ошибкой установки.
+  const versionField = VERSION_FIELD_BY_STACK[project.stack];
+  for (const [field, value] of Object.entries(project)) {
+    if (!Object.values(VERSION_FIELD_BY_STACK).includes(field)) continue;
+    if (field !== versionField) {
+      throw new ConfigError(
+        `project.${field}: поле не относится к стеку ${JSON.stringify(project.stack)}`,
+        `project.${field}`,
+      );
+    }
+    const pattern = VERSION_PATTERN_BY_STACK[project.stack];
+    if (typeof value !== 'string' || !pattern.test(value)) {
+      throw new ConfigError(
+        `project.${field}: ожидается строка вида ${pattern}, получено ${JSON.stringify(value)}`,
+        `project.${field}`,
+      );
+    }
+  }
+
   requireOneOf(doc.autonomy, AUTONOMY, 'autonomy');
   requireOneOf(doc.stage, STAGES, 'stage');
 

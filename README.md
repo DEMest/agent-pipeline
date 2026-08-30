@@ -13,6 +13,10 @@ The agent does the setup, not you. In your project directory:
 
     /pipeline:init
 
+It detects the stack, reads the real check commands out of your project instead of guessing them,
+asks only what it cannot find out on its own, generates the CI workflow, opens a pull request and
+takes it to a green build.
+
 ### Starting from nothing
 
 You do not need any code first. Make an empty folder, open Claude Code in it, run `/pipeline:init`,
@@ -27,10 +31,6 @@ fixed.
 A new project starts at `stage: sketch`, where tests are not yet required and pushing straight to
 `main` is allowed — the loop should not slow you down while you are still looking for the shape of
 the idea.
-
-It detects the stack, reads the real check commands out of your project instead of guessing them,
-asks only what it cannot find out on its own, generates the CI workflow, opens a pull request and
-takes it to a green build.
 
 ## What lands in your project
 
@@ -77,6 +77,19 @@ Verified against a real Spring Boot 4.1.1 project on Java 21 with Maven: generat
 test`, `pipeline.sh build` and the drift check all pass, and the jar lands exactly where the
 Dockerfile's `COPY` expects it. The container image build itself has not been exercised yet.
 
+**python** — pip, Poetry or uv, detected from the project and written into `project.build`.
+The choice decides which commands run and what CI caches, so it is recorded rather than guessed.
+Dependency installation checks whether a file exists before using it, but never swallows a failed
+install: a missing `requirements.txt` is normal, a broken install must fail the step.
+
+**go** — no build field, because modules and caching are built into the tool itself. Module
+download is explicit and the module cache is on.
+
+Python was verified end to end on a real interpreter — config, generation, `pipeline.sh`, and a
+deliberately broken test to confirm the gate turns red — but not with pytest or a real dependency
+install, because this machine had neither pytest nor network access for pip. Go is covered by the
+generator's tests only: no Go toolchain was available to run a real project through.
+
 ## Commands
 
 | Command | What it does |
@@ -120,8 +133,6 @@ pin a known host key in a secret instead.
 
 Stated plainly, because a template that oversells itself wastes your time:
 
-- **python** and **go** are valid in the config but generation refuses with an explicit error
-  rather than producing something broken;
 - no maturity stages yet — checks do not tighten on their own as a project grows;
 - no database backup before migrations, though the design calls for one.
 

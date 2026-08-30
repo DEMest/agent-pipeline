@@ -83,7 +83,7 @@ test('SessionStart-хук построен на белом списке разр
 });
 
 
-for (const stack of ['node-ts', 'java']) {
+for (const stack of ['node-ts', 'java', 'python', 'go']) {
   test(`шаблон compose стека ${stack} берёт тег образа из переменной`, () => {
     // Один и тот же файл обслуживает выкатку и откат: подставляется другой IMAGE.
     // Прибитый тег сделал бы откат невозможным.
@@ -118,3 +118,54 @@ for (const build of ['maven', 'gradle']) {
     assert.match(dockerfile, /eclipse-temurin:\d+-jre/, 'финальный образ должен быть на JRE, а не на JDK');
   });
 }
+
+for (const build of ['pip', 'poetry', 'uv']) {
+  test(`пресет python/${build} вызывает свой менеджер зависимостей`, () => {
+    const preset = JSON.parse(readText(`templates/stacks/python/preset-${build}.json`));
+    const commands = Object.values(preset.checks).join(' ');
+    const expected = { pip: 'python -m', poetry: 'poetry run', uv: 'uv run' }[build];
+    assert.ok(commands.includes(expected), `команды должны идти через ${expected}`);
+    for (const other of ['poetry run', 'uv run'].filter((p) => p !== expected)) {
+      assert.equal(commands.includes(other), false, `в пресете ${build} не должно быть ${other}`);
+    }
+  });
+
+  test(`пресет python/${build} ссылается только на существующие проверки`, () => {
+    const preset = JSON.parse(readText(`templates/stacks/python/preset-${build}.json`));
+    assert.ok(Object.hasOwn(preset.checks, 'test'));
+    for (const name of preset.required) {
+      assert.ok(Object.hasOwn(preset.checks, name), `required ссылается на ${name}, которого нет в checks`);
+    }
+  });
+
+  test(`Dockerfile python/${build} не тащит сборочные инструменты в финальный образ`, () => {
+    // Многостадийность здесь не украшение: без неё в образе остаются pip,
+    // компиляторы и заголовки, то есть лишний вес и лишняя поверхность атаки.
+    const dockerfile = readText(`templates/stacks/python/Dockerfile.${build}`);
+    assert.match(dockerfile, /AS build/);
+    assert.match(dockerfile, /COPY --from=build/);
+  });
+}
+
+test('пресет go ссылается только на существующие проверки', () => {
+  const preset = JSON.parse(readText('templates/stacks/go/preset.json'));
+  assert.ok(Object.hasOwn(preset.checks, 'test'));
+  for (const name of preset.required) {
+    assert.ok(Object.hasOwn(preset.checks, name), `required ссылается на ${name}, которого нет в checks`);
+  }
+});
+
+test('Dockerfile go собирает статический бинарник', () => {
+  // Без CGO_ENABLED=0 бинарник тянет за собой libc и не запускается
+  // в distroless-образе, где её нет.
+  const dockerfile = readText('templates/stacks/go/Dockerfile');
+  assert.match(dockerfile, /CGO_ENABLED=0/);
+  assert.match(dockerfile, /COPY --from=build/);
+});
+
+test('smoke-тесты новых стеков не зависят от кода проекта', () => {
+  assert.match(readText('templates/stacks/python/tests/test_smoke.py'), /def test_/);
+  const goSmoke = readText('templates/stacks/go/smoke_test.go');
+  assert.match(goSmoke, /func Test/);
+  assert.match(goSmoke, /package main/);
+});

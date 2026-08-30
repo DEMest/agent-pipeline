@@ -61,9 +61,28 @@ test('для node-ts ставит Node и выполняет npm ci', () => {
   assert.ok(doc.jobs.checks.steps.some((s) => s.run === 'npm ci'));
 });
 
-test('нереализованный стек отвергается явной ошибкой', () => {
-  const cfg = { ...CFG, project: { ...CFG.project, stack: 'go' } };
-  assert.throws(() => generateCi(cfg, HASH), (e) => e instanceof UnsupportedStackError && e.stackName === 'go');
+test('стек без реализации в генераторе отвергается явной ошибкой', () => {
+  // Валидатор конфига и генератор — разные списки стеков. Если стек добавят
+  // в валидатор и забудут в генераторе, без этой проверки пользователь получил бы
+  // невнятный сбой вместо сообщения о том, что стек не поддерживается.
+  const cfg = { ...CFG, project: { ...CFG.project, stack: 'rust' } };
+  assert.throws(() => generateCi(cfg, HASH), (e) => e instanceof UnsupportedStackError && e.stackName === 'rust');
+});
+
+test('каждый стек, который принимает конфиг, умеет генерировать CI', () => {
+  // Страж рассинхрона между STACKS в конфиге и setupSteps в генераторе:
+  // добавили стек в один список, забыли в другом — тест краснеет здесь,
+  // а не у пользователя на его проекте.
+  const byStack = {
+    'node-ts': { name: 'a', stack: 'node-ts', goal: 'g' },
+    java: { name: 'a', stack: 'java', build: 'maven', goal: 'g' },
+    python: { name: 'a', stack: 'python', build: 'pip', goal: 'g' },
+    go: { name: 'a', stack: 'go', goal: 'g' },
+  };
+  for (const [stack, project] of Object.entries(byStack)) {
+    const cfg = { ...CFG, project, checks: { test: 'x' }, required: ['test'] };
+    assert.doesNotThrow(() => generateCi(cfg, HASH), `стек ${stack} не генерируется`);
+  }
 });
 
 const javaConfig = (build, extra = {}) => ({
@@ -116,4 +135,85 @@ test('java не тянет за собой установку Node', () => {
   const doc = parseYaml(generateCi(javaConfig('maven'), HASH));
   assert.equal(doc.jobs.checks.steps.some((s) => s.uses?.startsWith('actions/setup-node@')), false);
   assert.equal(doc.jobs.checks.steps.some((s) => s.run === 'npm ci'), false);
+});
+
+const pyConfig = (build, extra = {}) => ({
+  ...CFG,
+  project: { name: 'my-app', stack: 'python', build, goal: 'g', ...extra },
+  checks: { test: 'python -m pytest' },
+  required: ['test'],
+});
+
+for (const build of ['pip', 'poetry', 'uv']) {
+  test(`для python/${build} ставится интерпретатор и зависимости`, () => {
+    const doc = parseYaml(generateCi(pyConfig(build), HASH));
+    const setup = doc.jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-python@'));
+    assert.ok(setup, 'нет шага установки python');
+    const install = doc.jobs.checks.steps.find((s) => s.name === 'Поставить зависимости');
+    assert.ok(install, 'нет шага установки зависимостей');
+  });
+}
+
+test('кэш зависимостей python соответствует менеджеру', () => {
+  const cacheOf = (build) => parseYaml(generateCi(pyConfig(build), HASH))
+    .jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-python@')).with.cache;
+  assert.equal(cacheOf('pip'), 'pip');
+  assert.equal(cacheOf('poetry'), 'poetry');
+  // setup-python не знает про uv: указать ему несуществующий менеджер значит
+  // получить ошибку шага, а не кэш. uv кэширует сам.
+  assert.equal(cacheOf('uv'), undefined);
+});
+
+test('poetry ставится раньше setup-python, иначе кэшировать нечего', () => {
+  const steps = parseYaml(generateCi(pyConfig('poetry'), HASH)).jobs.checks.steps;
+  const poetryIndex = steps.findIndex((s) => s.name === 'Установить poetry');
+  const setupIndex = steps.findIndex((s) => s.uses?.startsWith('actions/setup-python@'));
+  assert.notEqual(poetryIndex, -1);
+  assert.ok(poetryIndex < setupIndex, 'poetry должен ставиться до setup-python');
+});
+
+test('установка зависимостей pip не глушит ошибку установки', () => {
+  // Отсутствие requirements.txt — норма, а вот упавшая установка обязана уронить
+  // шаг. Поэтому проверка файла через if, а не "|| true", который скрыл бы сбой.
+  const install = parseYaml(generateCi(pyConfig('pip'), HASH))
+    .jobs.checks.steps.find((s) => s.name === 'Поставить зависимости').run;
+  assert.match(install, /if \[ -f requirements\.txt \]/);
+  assert.equal(install.includes('|| true'), false);
+});
+
+test('версия python берётся из конфига, иначе 3.12', () => {
+  const versionOf = (project) => parseYaml(generateCi(pyConfig('pip', project), HASH))
+    .jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-python@')).with['python-version'];
+  assert.equal(versionOf({}), '3.12');
+  assert.equal(versionOf({ python_version: '3.11' }), '3.11');
+});
+
+const goConfig = (extra = {}) => ({
+  ...CFG,
+  project: { name: 'my-app', stack: 'go', goal: 'g', ...extra },
+  checks: { test: 'go test ./...' },
+  required: ['test'],
+});
+
+test('для go включён кэш модулей и скачиваются зависимости', () => {
+  const steps = parseYaml(generateCi(goConfig(), HASH)).jobs.checks.steps;
+  const setup = steps.find((s) => s.uses?.startsWith('actions/setup-go@'));
+  assert.ok(setup, 'нет шага установки go');
+  assert.equal(setup.with.cache, true);
+  assert.ok(steps.some((s) => s.run === 'go mod download'));
+});
+
+test('версия go по умолчанию stable, но проект может назвать свою', () => {
+  const versionOf = (project) => parseYaml(generateCi(goConfig(project), HASH))
+    .jobs.checks.steps.find((s) => s.uses?.startsWith('actions/setup-go@')).with['go-version'];
+  assert.equal(versionOf({}), 'stable');
+  assert.equal(versionOf({ go_version: '1.23' }), '1.23');
+});
+
+test('python и go не тянут за собой чужие рантаймы', () => {
+  for (const cfg of [pyConfig('pip'), goConfig()]) {
+    const uses = parseYaml(generateCi(cfg, HASH)).jobs.checks.steps.map((s) => s.uses).filter(Boolean);
+    assert.equal(uses.some((u) => u.startsWith('actions/setup-node@')), false);
+    assert.equal(uses.some((u) => u.startsWith('actions/setup-java@')), false);
+  }
 });

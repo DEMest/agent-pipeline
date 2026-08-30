@@ -1,0 +1,8 @@
+{
+  "checks": {
+    "test": "poetry run pytest",
+    "lint": "poetry run ruff check .",
+    "typecheck": "poetry run mypy ."
+  },
+  "required": ["test"]
+}
