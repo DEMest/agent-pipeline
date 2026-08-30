@@ -101,7 +101,12 @@ export function diagnose(projectDir, logPath) {
   return describeFailures(parseFailedLog(logText), config);
 }
 
-const USAGE = 'использование: node src/cli.mjs <generate|check|diagnose> <каталог проекта> [<путь лога>]';
+const USAGE = [
+  'использование: <вызов> <generate|check|diagnose> <каталог проекта> [<путь лога>]',
+  'где <вызов> — один из:',
+  '  npx --yes github:DEMest/agent-pipeline',
+  '  node <путь к репозиторию>/src/cli.mjs',
+].join('\n');
 
 // Явный разбор аргументов вместо неявного "если оба на месте": раньше
 // `node src/cli.mjs check` без каталога проваливал условие `command && projectDir`
