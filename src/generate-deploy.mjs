@@ -1,4 +1,5 @@
 import { stringify as stringifyYaml } from 'yaml';
+import { generatorLine } from './version.mjs';
 
 // Тег образа — commit SHA. На откате любая более хитрая схема версионирования
 // только мешает: нужно быстро назвать предыдущее заведомо рабочее состояние.
@@ -166,6 +167,7 @@ export function generateDeploy(config, hash) {
   };
 
   return `# generated-from-config: sha256:${hash}\n`
+    + `${generatorLine()}\n`
     + '# Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации.\n'
     + stringifyYaml(workflow, { lineWidth: 0 });
 }

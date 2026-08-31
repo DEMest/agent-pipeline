@@ -123,6 +123,7 @@ The loop itself is identical.
 | `/pipeline:init` | set the pipeline up in a new or existing project |
 | `/pipeline:ship <task>` | branch, test, check, PR, green CI, merge by the project's autonomy mode |
 | `/pipeline:fix-ci` | read the failed run, diagnose the cause, fix it — at most three attempts |
+| `/pipeline:upgrade` | rebuild the artifacts with the current version of the tool |
 
 Outside Claude Code these are the three procedures in [AGENTS.md](AGENTS.md), asked for in plain
 words rather than typed as commands.
@@ -130,6 +131,23 @@ words rather than typed as commands.
 `/pipeline:fix-ci` does not read the raw log. A parser turns hundreds of lines of timestamps and
 ANSI codes into the failing job, the failing step, the error messages and the command that step
 runs, taken from your config.
+
+## Keeping projects up to date
+
+The artifacts live in your repository while the tool moves on, so a project set up six months ago
+keeps running an old workflow. The drift check will not notice: it compares artifacts against the
+config, and here it is the generator that moved, not the config.
+
+Every generated file records which version produced it:
+
+    # generated-by: agent-pipeline 0.1.0
+
+Rebuilding is one command, and it does nothing when there is nothing to do:
+
+    npx --yes github:DEMest/agent-pipeline upgrade .
+
+Review the result with `git diff` and land it through a pull request like any other change — an
+upgrade alters what CI checks and what gets deployed, so it deserves the same green run.
 
 ## Autonomy
 

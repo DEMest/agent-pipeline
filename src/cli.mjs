@@ -7,6 +7,7 @@ import { generatePipelineSh } from './generate-sh.mjs';
 import { generateCi } from './generate-ci.mjs';
 import { generateDeploy } from './generate-deploy.mjs';
 import { parseFailedLog, describeFailures } from './ci-log.mjs';
+import { VERSION, versionOf } from './version.mjs';
 
 const MARKER = '# generated-from-config: sha256:';
 
@@ -47,6 +48,32 @@ export function generateInto(projectDir) {
   }
 
   return { written, hash };
+}
+
+// Артефакты живут в репозитории проекта, а генератор развивается отдельно. Без этой
+// команды проект, развёрнутый полгода назад, навсегда остаётся со старым workflow:
+// drift-check его не поймает, потому что конфиг не менялся, — расходится не конфиг,
+// а сам инструмент.
+export function upgrade(projectDir) {
+  const before = new Map();
+  for (const path of Object.values(artifactPaths(projectDir))) {
+    if (existsSync(path)) before.set(path, readFileSync(path, 'utf8'));
+  }
+
+  const { written } = generateInto(projectDir);
+
+  const changed = [];
+  const unchanged = [];
+  for (const path of written) {
+    const old = before.get(path);
+    const next = readFileSync(path, 'utf8');
+    // Сравниваются тексты целиком, а не только версии: генератор мог поменять
+    // содержимое, не меняя номера версии, и наоборот.
+    if (old === next) unchanged.push(path);
+    else changed.push({ path, from: old ? versionOf(old) : null });
+  }
+
+  return { toVersion: VERSION, changed, unchanged };
 }
 
 export function checkDrift(projectDir) {
@@ -102,7 +129,7 @@ export function diagnose(projectDir, logPath) {
 }
 
 const USAGE = [
-  'использование: <вызов> <generate|check|diagnose> <каталог проекта> [<путь лога>]',
+  'использование: <вызов> <generate|check|diagnose|upgrade> <каталог проекта> [<путь лога>]',
   'где <вызов> — один из:',
   '  npx --yes github:DEMest/agent-pipeline',
   '  node <путь к репозиторию>/src/cli.mjs',
@@ -117,8 +144,8 @@ function runCli(command, projectDir, logPath) {
     console.error(USAGE);
     return 2;
   }
-  if (command !== 'generate' && command !== 'check' && command !== 'diagnose') {
-    console.error(`неизвестная команда: ${command} (доступны: generate, check, diagnose)`);
+  if (!['generate', 'check', 'diagnose', 'upgrade'].includes(command)) {
+    console.error(`неизвестная команда: ${command} (доступны: generate, check, diagnose, upgrade)`);
     return 2;
   }
   if (!projectDir) {
@@ -139,6 +166,18 @@ function runCli(command, projectDir, logPath) {
         return 1;
       }
       console.log('артефакты соответствуют конфигу');
+      return 0;
+    }
+    if (command === 'upgrade') {
+      const { toVersion, changed, unchanged } = upgrade(projectDir);
+      if (changed.length === 0) {
+        console.log(`артефакты уже собраны версией ${toVersion}, обновлять нечего`);
+        return 0;
+      }
+      for (const { path, from } of changed) {
+        console.log(`обновлено до ${toVersion} (было ${from ?? 'без пометки версии'}): ${path}`);
+      }
+      console.log('проверьте изменения через git diff и закоммитьте их');
       return 0;
     }
     if (command === 'diagnose') {

@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { generateInto, checkDrift, diagnose } from '../src/cli.mjs';
+import { generateInto, checkDrift, diagnose, upgrade } from '../src/cli.mjs';
 
 const CLI_PATH = join('src', 'cli.mjs');
 
@@ -260,6 +260,61 @@ test('оставшийся deploy.yml замечается, даже если с
     const { ok, stale } = checkDrift(dir);
     assert.equal(ok, false);
     assert.ok(stale.some((p) => p.endsWith('deploy.yml')));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('upgrade помечает артефакты версией инструмента', () => {
+  const dir = makeProject();
+  try {
+    generateInto(dir);
+    const sh = readFileSync(join(dir, 'scripts', 'pipeline.sh'), 'utf8');
+    assert.match(sh, /^# generated-by: agent-pipeline \d+\.\d+\.\d+$/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('upgrade на свежих артефактах ничего не меняет', () => {
+  // Идемпотентность важна: иначе каждая проверка обновления создавала бы
+  // изменение в git и человек не отличил бы настоящее обновление от шума.
+  const dir = makeProject();
+  try {
+    generateInto(dir);
+    const { changed, unchanged } = upgrade(dir);
+    assert.deepEqual(changed, []);
+    assert.ok(unchanged.length > 0, 'артефакты должны попасть в список неизменившихся');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('upgrade замечает артефакт, собранный другой версией', () => {
+  const dir = makeProject();
+  try {
+    generateInto(dir);
+    const shPath = join(dir, 'scripts', 'pipeline.sh');
+    const aged = readFileSync(shPath, 'utf8').replace(/# generated-by: agent-pipeline .*/, '# generated-by: agent-pipeline 0.0.1');
+    writeFileSync(shPath, aged, 'utf8');
+    const { changed, toVersion } = upgrade(dir);
+    assert.equal(changed.length, 1, `ожидался один изменённый артефакт, получено ${changed.length}`);
+    assert.equal(changed[0].from, '0.0.1');
+    assert.notEqual(toVersion, '0.0.1');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('upgrade сообщает, что версии не было, для артефактов старого формата', () => {
+  const dir = makeProject();
+  try {
+    generateInto(dir);
+    const shPath = join(dir, 'scripts', 'pipeline.sh');
+    const legacy = readFileSync(shPath, 'utf8').split('\n').filter((l) => !l.startsWith('# generated-by:')).join('\n');
+    writeFileSync(shPath, legacy, 'utf8');
+    const { changed } = upgrade(dir);
+    assert.equal(changed[0].from, null, 'у артефакта без пометки версии from должен быть null');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

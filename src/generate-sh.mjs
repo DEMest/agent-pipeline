@@ -1,8 +1,11 @@
+import { generatorLine } from './version.mjs';
+
 export function generatePipelineSh(config, hash) {
   const names = Object.keys(config.checks);
   const lines = [
     '#!/usr/bin/env sh',
     `# generated-from-config: sha256:${hash}`,
+    generatorLine(),
     '# Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации:',
     '# меняйте .pipeline/config.yml и перезапускайте генерацию.',
     'set -eu',

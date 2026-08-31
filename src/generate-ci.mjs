@@ -1,4 +1,5 @@
 import { stringify as stringifyYaml } from 'yaml';
+import { generatorLine } from './version.mjs';
 
 export class UnsupportedStackError extends Error {
   constructor(stackName) {
@@ -146,6 +147,7 @@ export function generateCi(config, hash) {
   };
 
   return `# generated-from-config: sha256:${hash}\n`
+    + `${generatorLine()}\n`
     + '# Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации.\n'
     + stringifyYaml(workflow, { lineWidth: 0 });
 }

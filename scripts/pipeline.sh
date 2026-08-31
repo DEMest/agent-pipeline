@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 # generated-from-config: sha256:a15da37c98be5548f28016cd704d75ffbbacb62e649847fb36d7365debde36fd
+# generated-by: agent-pipeline 0.1.0
 # Файл сгенерирован из .pipeline/config.yml. Правки затрутся при следующей генерации:
 # меняйте .pipeline/config.yml и перезапускайте генерацию.
 set -eu
