@@ -300,3 +300,33 @@ test('лимит попыток в AGENTS.md совпадает со скилл�
   assert.match(agents, /Лимит — три на один pull request/);
   assert.match(skill, /три попытки|Лимит — три/i);
 });
+
+test('init кладёт заготовку соглашений в любой проект, а существующую не затирает', () => {
+  const text = readText('skills/pipeline-init/SKILL.md');
+  assert.match(text, /conventions\.md/);
+  // Затереть накопленную память проекта — худшее, что может сделать повторный init.
+  assert.match(text, /Существующий файл не трогать/);
+});
+
+test('ship не только читает соглашения, но и дописывает принятые решения', () => {
+  // Файл, который все читают и никто не пишет, останется пустым навсегда,
+  // и память между сессиями так и не появится.
+  const text = readText('skills/pipeline-ship/SKILL.md');
+  assert.match(text, /дописывать туда же/);
+  assert.match(text, /Отменённое решение удаляется/);
+});
+
+test('AGENTS.md требует того же от агентов вне Claude Code', () => {
+  const text = readText('AGENTS.md');
+  assert.match(text, /conventions\.md/);
+  // Перенос строки в вёрстке документа не должен ломать проверку смысла.
+  assert.match(text, /дописать туда\s+строкой с датой и причиной/);
+});
+
+test('заготовка соглашений объясняет, что в неё писать не надо', () => {
+  // Без этого файл превращается в пересказ структуры кода и команд из конфига,
+  // то есть в дубль, который устаревает быстрее, чем его читают.
+  const text = readText('templates/common/conventions.md');
+  assert.match(text, /config\.yml/);
+  assert.match(text, /удаляются, а не\s*\n?\s*копятся/);
+});
