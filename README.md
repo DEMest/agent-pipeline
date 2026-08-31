@@ -1,11 +1,21 @@
 # Agent Pipeline
 
-A Claude Code plugin that sets up the loop your project actually needs: prompt → code → tests → PR →
-CI → merge → deploy. One config file describes the project; everything else is generated from it.
+Sets up the loop your project actually needs: prompt → code → tests → PR → CI → merge → deploy.
+One config file describes the project; everything else is generated from it. The generated pipeline
+is plain files and plain Node, so CI runs it with no AI involved at all.
 
 ## Install
 
+In Claude Code, where it also brings slash commands:
+
     /plugin marketplace add DEMest/agent-pipeline
+
+With Codex, Cursor, Jules or any other agent following the `AGENTS.md` convention, nothing to
+install — point it at [AGENTS.md](AGENTS.md) and let it call the tool directly:
+
+    npx --yes github:DEMest/agent-pipeline generate .
+
+See [Other AI tools](#other-ai-tools) for what differs.
 
 ## Setup
 
@@ -19,10 +29,10 @@ takes it to a green build.
 
 ### Starting from nothing
 
-You do not need any code first. Make an empty folder, open Claude Code in it, run `/pipeline:init`,
-and answer the questions — the agent asks which stack you want (there is nothing to detect yet),
-creates a minimal skeleton with one smoke test, installs dependencies so the lockfile exists, and
-takes the first pull request to a green build.
+You do not need any code first. Make an empty folder, open your agent in it, and ask it to set the
+pipeline up — `/pipeline:init` in Claude Code, or plain words anywhere else. It asks which stack you
+want (there is nothing to detect yet), creates a minimal skeleton with one smoke test, installs
+dependencies so the lockfile exists, and takes the first pull request to a green build.
 
 The point of doing this before writing a feature is that the pipeline proves itself while the
 project is still empty. A red pipeline that you plan to fix "once there is real code" never gets
@@ -41,7 +51,7 @@ the idea.
 | `.github/workflows/deploy.yml` | generated, only when a `deploy` section exists |
 | `scripts/pipeline.sh` | the same checks locally that CI runs |
 | `deploy/compose.yml` | copied to your server on every deploy |
-| `.claude/` | a hook that tells the next agent whether the pipeline is configured |
+| `.claude/` | Claude Code only: a hook telling the next session whether the pipeline is configured |
 
 Nothing else. The tests and fixtures in this repository stay here — they are what keeps the
 generator honest, and they never travel into your project.
@@ -113,6 +123,9 @@ The loop itself is identical.
 | `/pipeline:init` | set the pipeline up in a new or existing project |
 | `/pipeline:ship <task>` | branch, test, check, PR, green CI, merge by the project's autonomy mode |
 | `/pipeline:fix-ci` | read the failed run, diagnose the cause, fix it — at most three attempts |
+
+Outside Claude Code these are the three procedures in [AGENTS.md](AGENTS.md), asked for in plain
+words rather than typed as commands.
 
 `/pipeline:fix-ci` does not read the raw log. A parser turns hundreds of lines of timestamps and
 ANSI codes into the failing job, the failing step, the error messages and the command that step
