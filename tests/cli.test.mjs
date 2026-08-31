@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { generateInto, checkDrift, diagnose, upgrade } from '../src/cli.mjs';
+import { generateInto, checkDrift, diagnose, upgrade, inspectStage } from '../src/cli.mjs';
 
 const CLI_PATH = join('src', 'cli.mjs');
 
@@ -315,6 +315,55 @@ test('upgrade сообщает, что версии не было, для арт
     writeFileSync(shPath, legacy, 'utf8');
     const { changed } = upgrade(dir);
     assert.equal(changed[0].from, null, 'у артефакта без пометки версии from должен быть null');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('state сообщает стадию из конфига и стадию по метрикам', () => {
+  const dir = makeProject();
+  try {
+    const result = inspectStage(dir);
+    assert.equal(result.current, 'sketch');
+    assert.ok(['sketch', 'shaping', 'product', 'sustained'].includes(result.suggested));
+    assert.ok(Number.isInteger(result.metrics.sourceFiles));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('state не переписывает снимок, когда вывод не изменился', () => {
+  // Метрики меняются с каждым коммитом. Запись на каждый прогон превратила бы
+  // историю проекта в поток диффов, среди которых настоящий переход незаметен.
+  const dir = makeProject();
+  try {
+    const first = inspectStage(dir);
+    assert.equal(first.written, true, 'первый прогон должен создать снимок');
+    const second = inspectStage(dir);
+    assert.equal(second.written, false, 'повторный прогон не должен трогать файл');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('state работает в каталоге без git, а не падает', () => {
+  // Проект может быть ещё не под контролем версий — метрики истории просто нулевые.
+  const dir = makeProject();
+  try {
+    const result = inspectStage(dir);
+    assert.equal(result.metrics.commits, 0);
+    assert.equal(result.metrics.contributors, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('испорченный снимок не мешает работе', () => {
+  const dir = makeProject();
+  try {
+    writeFileSync(join(dir, '.pipeline', 'state.json'), '{ это не json', 'utf8');
+    const result = inspectStage(dir);
+    assert.ok(result.suggested, 'стадия должна вычислиться, несмотря на испорченный снимок');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

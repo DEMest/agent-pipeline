@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-08-31T14:11:54.615Z",
+  "stage": "shaping",
+  "suggested": "shaping",
+  "outgrown": false,
+  "reasons": [
+    "файлов исходников: 18 (порог 15)",
+    "коммитов: 44 (порог 30)"
+  ],
+  "metrics": {
+    "sourceFiles": 18,
+    "loc": 2689,
+    "directDeps": 1,
+    "commits": 44,
+    "contributors": 1,
+    "ageDays": 9,
+    "hasProductionEnv": false,
+    "painSignals": []
+  },
+  "painSignals": []
+}

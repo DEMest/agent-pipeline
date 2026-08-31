@@ -107,7 +107,7 @@ generated workflows and `scripts/pipeline.sh` — is plain Node and plain files,
 drive it, and CI runs it with no agent at all.
 
 For Codex, Cursor, Jules, Aider and anything else following the `AGENTS.md` convention, the same
-three procedures live in [AGENTS.md](AGENTS.md) at the repository root. Invoke the tool without
+same procedures live in [AGENTS.md](AGENTS.md) at the repository root. Invoke the tool without
 Claude-specific variables:
 
     npx --yes github:DEMest/agent-pipeline generate .
@@ -124,13 +124,42 @@ The loop itself is identical.
 | `/pipeline:ship <task>` | branch, test, check, PR, green CI, merge by the project's autonomy mode |
 | `/pipeline:fix-ci` | read the failed run, diagnose the cause, fix it — at most three attempts |
 | `/pipeline:upgrade` | rebuild the artifacts with the current version of the tool |
+| `/pipeline:evolve` | check whether the project outgrew its stage, and tighten the checks |
 
-Outside Claude Code these are the three procedures in [AGENTS.md](AGENTS.md), asked for in plain
-words rather than typed as commands.
+Outside Claude Code these are the numbered procedures in [AGENTS.md](AGENTS.md), asked for in
+plain words rather than typed as commands.
 
 `/pipeline:fix-ci` does not read the raw log. A parser turns hundreds of lines of timestamps and
 ANSI codes into the failing job, the failing step, the error messages and the command that step
 runs, taken from your config.
+
+## Growing with the project
+
+A three-file sketch and a service with users need different strictness, so the pipeline has a
+stage — `sketch`, `shaping`, `product`, `sustained` — recorded in the config. It does not move on
+feeling:
+
+    npx --yes github:DEMest/agent-pipeline state .
+
+That prints the observable metrics (source files, lines, direct dependencies, commits,
+contributors, age, whether production is configured) and says whether the project has outgrown its
+stage, listing the reasons with numbers. The snapshot in `.pipeline/state.json` is rewritten only
+when that verdict changes — metrics move with every commit, and writing on each run would bury the
+real transition in noise.
+
+Two things make this survive contact with a real codebase:
+
+**Tightening never breaks what is already written.** New rules apply to changed code — lint over
+`git diff`, coverage thresholds set to "not below current", `--new-from-rev` for Go. The
+alternative is a first run with hundreds of errors in old code, after which the rule gets switched
+off entirely and strictness disappears instead of growing.
+
+**Pain counts more than size.** A production rollback, the same place breaking twice, main left red
+for a day — these go into `painSignals` and raise the stage regardless of how small the project is.
+"The checks were not enough" is a stronger argument than any line count.
+
+The transition itself goes through its own pull request, never alongside a feature: it changes the
+rules for all the code, and that deserves to be seen rather than hidden inside someone's diff.
 
 ## Keeping projects up to date
 
@@ -180,8 +209,10 @@ pin a known host key in a secret instead.
 
 Stated plainly, because a template that oversells itself wastes your time:
 
-- no maturity stages yet — checks do not tighten on their own as a project grows;
-- no database backup before migrations, though the design calls for one.
+- no database backup before migrations, though the design calls for one;
+- the ratchet is documented in the evolve skill but not automated: the agent narrows new rules to
+  changed files by hand, the generator does not emit that wiring yet;
+- no guard hooks — nothing mechanically stops a push straight to `main` or a committed secret.
 
 ## Development
 

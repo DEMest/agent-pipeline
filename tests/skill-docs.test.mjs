@@ -330,3 +330,39 @@ test('заготовка соглашений объясняет, что в не
   assert.match(text, /config\.yml/);
   assert.match(text, /удаляются, а не\s*\n?\s*копятся/);
 });
+
+const EVOLVE = () => readText('skills/pipeline-evolve/SKILL.md');
+
+test('у скилла взросления есть frontmatter с именем и описанием', () => {
+  const text = EVOLVE();
+  assert.match(text, /^---\n/);
+  assert.match(text, /^name: pipeline-evolve$/m);
+  assert.match(text, /^description: .+$/m);
+});
+
+test('взросление опирается на метрики, а не на ощущение', () => {
+  assert.match(EVOLVE(), /cli\.mjs" state \./);
+});
+
+test('взросление идёт отдельным PR, а не попутно с задачей', () => {
+  // Смена правил проверки всего кода, спрятанная внутри диффа с фичей,
+  // не будет замечена и обсуждена.
+  const text = EVOLVE();
+  assert.match(text, /Отдельный PR, не попутно с задачей/);
+});
+
+test('скилл требует применять новые правила к изменённому коду', () => {
+  // Без храповика первое же ужесточение даёт сотни ошибок в старом коде,
+  // правило выключают целиком, и строгость исчезает.
+  const text = EVOLVE();
+  assert.match(text, /git diff --name-only/);
+  assert.match(text, /baseline\.json/);
+});
+
+test('скилл запрещает выдумывать взросление, которого метрики не показывают', () => {
+  assert.match(EVOLVE(), /Не перерос — сказать об этом прямо и остановиться/);
+});
+
+test('команда evolve ссылается на скилл', () => {
+  assert.match(readText('commands/evolve.md'), /pipeline-evolve/);
+});

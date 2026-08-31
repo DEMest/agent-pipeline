@@ -8,6 +8,8 @@ import { generateCi } from './generate-ci.mjs';
 import { generateDeploy } from './generate-deploy.mjs';
 import { parseFailedLog, describeFailures } from './ci-log.mjs';
 import { VERSION, versionOf } from './version.mjs';
+import { collectMetrics } from './collect-metrics.mjs';
+import { suggestStage, isHigher } from './stages.mjs';
 
 const MARKER = '# generated-from-config: sha256:';
 
@@ -17,6 +19,7 @@ function artifactPaths(projectDir) {
     shPath: join(projectDir, 'scripts', 'pipeline.sh'),
     ciPath: join(projectDir, '.github', 'workflows', 'ci.yml'),
     deployPath: join(projectDir, '.github', 'workflows', 'deploy.yml'),
+    statePath: join(projectDir, '.pipeline', 'state.json'),
   };
 }
 
@@ -76,6 +79,52 @@ export function upgrade(projectDir) {
   return { toVersion: VERSION, changed, unchanged };
 }
 
+// Снимок того, насколько проект вырос. Нужен, чтобы взросление опиралось на факт,
+// а не на память агента: в одной сессии он заметил бы рост, в другой нет.
+export function readState(projectDir) {
+  const { statePath } = artifactPaths(projectDir);
+  if (!existsSync(statePath)) return {};
+  try {
+    return JSON.parse(readFileSync(statePath, 'utf8'));
+  } catch {
+    // Испорченный снимок не должен мешать работе: он пересоберётся заново.
+    return {};
+  }
+}
+
+export function inspectStage(projectDir) {
+  const { configPath, statePath } = artifactPaths(projectDir);
+  const config = loadConfig(configPath);
+  const previous = readState(projectDir);
+  const metrics = collectMetrics(projectDir, config, previous);
+  const { stage: suggested, reasons } = suggestStage(metrics);
+  const current = config.stage;
+  const outgrown = isHigher(suggested, current);
+
+  const next = {
+    updatedAt: new Date().toISOString(),
+    stage: current,
+    suggested,
+    outgrown,
+    reasons,
+    metrics,
+    painSignals: previous.painSignals ?? [],
+  };
+
+  // Файл переписывается только при смене вывода: метрики меняются с каждым
+  // коммитом, и запись на каждый прогон превратила бы историю проекта в шум
+  // из диффов, среди которых настоящий переход стадии будет незаметен.
+  const changed = previous.stage !== next.stage
+    || previous.suggested !== next.suggested
+    || previous.outgrown !== next.outgrown;
+  if (changed) {
+    writeFileLf(statePath, `${JSON.stringify(next, null, 2)}
+`);
+  }
+
+  return { ...next, current, written: changed };
+}
+
 export function checkDrift(projectDir) {
   const { configPath, shPath, ciPath, deployPath } = artifactPaths(projectDir);
   const expected = configHash(readFileSync(configPath, 'utf8'));
@@ -129,7 +178,7 @@ export function diagnose(projectDir, logPath) {
 }
 
 const USAGE = [
-  'использование: <вызов> <generate|check|diagnose|upgrade> <каталог проекта> [<путь лога>]',
+  'использование: <вызов> <generate|check|diagnose|upgrade|state> <каталог проекта> [<путь лога>]',
   'где <вызов> — один из:',
   '  npx --yes github:DEMest/agent-pipeline',
   '  node <путь к репозиторию>/src/cli.mjs',
@@ -144,8 +193,8 @@ function runCli(command, projectDir, logPath) {
     console.error(USAGE);
     return 2;
   }
-  if (!['generate', 'check', 'diagnose', 'upgrade'].includes(command)) {
-    console.error(`неизвестная команда: ${command} (доступны: generate, check, diagnose, upgrade)`);
+  if (!['generate', 'check', 'diagnose', 'upgrade', 'state'].includes(command)) {
+    console.error(`неизвестная команда: ${command} (доступны: generate, check, diagnose, upgrade, state)`);
     return 2;
   }
   if (!projectDir) {
@@ -178,6 +227,22 @@ function runCli(command, projectDir, logPath) {
         console.log(`обновлено до ${toVersion} (было ${from ?? 'без пометки версии'}): ${path}`);
       }
       console.log('проверьте изменения через git diff и закоммитьте их');
+      return 0;
+    }
+    if (command === 'state') {
+      const result = inspectStage(projectDir);
+      console.log(`стадия в конфиге: ${result.current}`);
+      console.log(`стадия по метрикам: ${result.suggested}`);
+      for (const [key, value] of Object.entries(result.metrics)) {
+        if (key === 'painSignals') continue;
+        console.log(`  ${key}: ${value}`);
+      }
+      if (result.outgrown) {
+        console.log('');
+        console.log('проект перерос текущую стадию, основания:');
+        for (const reason of result.reasons) console.log(`  - ${reason}`);
+        console.log('переход выполняется отдельным PR, а не попутно с текущей задачей');
+      }
       return 0;
     }
     if (command === 'diagnose') {
